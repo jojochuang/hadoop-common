@@ -2476,6 +2476,11 @@ public abstract class Server {
         }
       }
 
+      if (alignmentContext != null) {
+        // Check incoming RPC request's state.
+        alignmentContext.receiveRequestState(header);
+      }
+
       CallerContext callerContext = null;
       if (header.hasCallerContext()) {
         callerContext =
