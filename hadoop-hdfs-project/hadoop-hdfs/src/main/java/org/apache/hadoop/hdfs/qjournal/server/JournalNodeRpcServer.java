@@ -30,6 +30,7 @@ import org.apache.hadoop.hdfs.HDFSPolicyProvider;
 import org.apache.hadoop.hdfs.protocolPB.PBHelper;
 import org.apache.hadoop.hdfs.qjournal.protocol.QJournalProtocol;
 import org.apache.hadoop.hdfs.qjournal.protocol.QJournalProtocolProtos.GetEditLogManifestResponseProto;
+import org.apache.hadoop.hdfs.qjournal.protocol.QJournalProtocolProtos.GetJournaledEditsResponseProto;
 import org.apache.hadoop.hdfs.qjournal.protocol.QJournalProtocolProtos.GetJournalStateResponseProto;
 import org.apache.hadoop.hdfs.qjournal.protocol.QJournalProtocolProtos.NewEpochResponseProto;
 import org.apache.hadoop.hdfs.qjournal.protocol.QJournalProtocolProtos.PrepareRecoveryResponseProto;
@@ -203,6 +204,13 @@ public class JournalNodeRpcServer implements QJournalProtocol {
         .setHttpPort(jn.getBoundHttpAddress().getPort())
         .setFromURL(jn.getHttpServerURI())
         .build();
+  }
+
+  @Override
+  public GetJournaledEditsResponseProto getJournaledEdits(String jid,
+      String nameServiceId, long sinceTxId, int maxTxns) throws IOException {
+    return jn.getOrCreateJournal(jid, nameServiceId)
+        .getJournaledEdits(sinceTxId, maxTxns);
   }
 
   @Override
