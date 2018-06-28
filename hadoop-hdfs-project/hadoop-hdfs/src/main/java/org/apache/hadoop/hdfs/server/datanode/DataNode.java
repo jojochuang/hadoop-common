@@ -48,6 +48,7 @@ import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_METRICS_LOGGER_P
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_METRICS_LOGGER_PERIOD_SECONDS_KEY;
 import static org.apache.hadoop.util.ExitUtil.terminate;
 
+import io.opentracing.util.GlobalTracer;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.hdfs.protocol.proto.ReconfigurationProtocolProtos.ReconfigurationProtocolService;
 
@@ -402,6 +403,14 @@ public class DataNode extends ReconfigurableBase
     return new Tracer.Builder("DataNode").
         conf(TraceUtils.wrapHadoopConf(DATANODE_HTRACE_PREFIX , conf)).
         build();
+
+    /*GlobalTracer.register(
+        new Configuration(
+            "DataNode",
+            new Configuration.SamplerConfiguration("const", 1),
+            new Configuration.ReporterConfiguration(
+                false, "localhost", null, 1000, 10000)
+        ).getTracer());*/
   }
 
   private long[] oobTimeouts; /** timeout value of each OOB type */

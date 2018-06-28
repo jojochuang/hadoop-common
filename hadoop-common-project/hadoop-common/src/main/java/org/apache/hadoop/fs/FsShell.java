@@ -23,6 +23,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 
+
+import io.opentracing.util.GlobalTracer;
+
 import org.apache.commons.lang.WordUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
@@ -300,9 +303,19 @@ public class FsShell extends Configured implements Tool {
   public int run(String argv[]) throws Exception {
     // initialize FsShell
     init();
-    Tracer tracer = new Tracer.Builder("FsShell").
+    /*Tracer tracer = new Tracer.Builder("FsShell").
         conf(TraceUtils.wrapHadoopConf(SHELL_HTRACE_PREFIX, getConf())).
-        build();
+        build();*/
+
+    io.opentracing.Tracer tracer =
+        new com.uber.jaeger.Configuration(
+            "FsShell",
+            new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
+            new com.uber.jaeger.Configuration.ReporterConfiguration(
+                false, "va1022.halxg.cloudera.com", 6831, 1000, 10000)
+        ).getTracer();
+    GlobalTracer.register(tracer);
+
     int exitCode = -1;
     if (argv.length < 1) {
       printUsage(System.err);
@@ -314,18 +327,17 @@ public class FsShell extends Configured implements Tool {
         if (instance == null) {
           throw new UnknownCommandException();
         }
-        TraceScope scope = tracer.newScope(instance.getCommandName());
+        /*TraceScope scope = tracer.newScope(instance.getCommandName());
         if (scope.getSpan() != null) {
           String args = StringUtils.join(" ", argv);
           if (args.length() > 2048) {
             args = args.substring(0, 2048);
           }
           scope.getSpan().addKVAnnotation("args", args);
-        }
-        try {
+        }*/
+        try (io.opentracing.Scope scope =
+            tracer.buildSpan(instance.getCommandName()).startActive(true)) {
           exitCode = instance.run(Arrays.copyOfRange(argv, 1, argv.length));
-        } finally {
-          scope.close();
         }
       } catch (IllegalArgumentException e) {
         if (e.getMessage() == null) {
@@ -345,7 +357,6 @@ public class FsShell extends Configured implements Tool {
         e.printStackTrace(System.err);
       }
     }
-    tracer.close();
     return exitCode;
   }
   
