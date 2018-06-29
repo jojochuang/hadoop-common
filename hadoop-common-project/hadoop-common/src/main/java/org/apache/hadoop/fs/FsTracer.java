@@ -44,13 +44,14 @@ public final class FsTracer {
 //              FS_CLIENT_HTRACE_PREFIX, conf)).
 //          build();
 
-      io.opentracing.Tracer instance =
+      io.opentracing.Tracer tempInstance =
           new com.uber.jaeger.Configuration(
               "FSClient",
               new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
               new com.uber.jaeger.Configuration.ReporterConfiguration(
                   false, "va1022.halxg.cloudera.com", 6831, 1000, 10000)
           ).getTracer();
+      instance = tempInstance;
       return instance;
     }
     return instance;

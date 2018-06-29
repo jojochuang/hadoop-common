@@ -307,7 +307,7 @@ public class FsShell extends Configured implements Tool {
         conf(TraceUtils.wrapHadoopConf(SHELL_HTRACE_PREFIX, getConf())).
         build();*/
 
-    io.opentracing.Tracer tracer =
+    /*io.opentracing.Tracer tracer =
         new com.uber.jaeger.Configuration(
             "FsShell",
             new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
@@ -316,7 +316,8 @@ public class FsShell extends Configured implements Tool {
         ).getTracer();
     if (!GlobalTracer.isRegistered()) {
       GlobalTracer.register(tracer);
-    }
+    }*/
+    io.opentracing.Tracer tracer = FsTracer.get(getConf());
 
     int exitCode = -1;
     if (argv.length < 1) {

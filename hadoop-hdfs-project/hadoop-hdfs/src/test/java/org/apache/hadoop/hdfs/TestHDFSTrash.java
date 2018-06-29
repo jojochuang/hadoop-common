@@ -32,6 +32,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.TestTrash;
 import org.apache.hadoop.fs.Trash;
@@ -73,16 +74,7 @@ public class TestHDFSTrash {
 
   @BeforeClass
   public static void setUp() throws Exception {
-    tracer =
-        new com.uber.jaeger.Configuration(
-            "HDFS test",
-            new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
-            new com.uber.jaeger.Configuration.ReporterConfiguration(
-                false, "va1022.halxg.cloudera.com", 6831, 1000, 10000)
-        ).getTracer();
-    if (!GlobalTracer.isRegistered()) {
-      GlobalTracer.register(tracer);
-    }
+    tracer = FsTracer.get(conf);
     scope = tracer.buildSpan("TestHDFSTrash").startActive(true);
 
     try (Scope setupScope = tracer.buildSpan("setup").startActive(true)) {
