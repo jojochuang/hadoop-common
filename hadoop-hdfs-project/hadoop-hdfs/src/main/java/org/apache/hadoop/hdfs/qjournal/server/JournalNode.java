@@ -50,8 +50,10 @@ import org.apache.hadoop.util.DiskChecker;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
-import org.apache.htrace.core.Tracer;
 import org.eclipse.jetty.util.ajax.JSON;
+
+import io.opentracing.Tracer;
+import io.opentracing.util.GlobalTracer;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
@@ -152,9 +154,21 @@ public class JournalNode implements Tool, Configurable, JournalNodeMXBean {
         conf.get(DFSConfigKeys.DFS_JOURNALNODE_EDITS_DIR_KEY,
         DFSConfigKeys.DFS_JOURNALNODE_EDITS_DIR_DEFAULT).trim());
     if (this.tracer == null) {
-      this.tracer = new Tracer.Builder("JournalNode").
-          conf(TraceUtils.wrapHadoopConf("journalnode.htrace", conf)).
-          build();
+//      this.tracer = new Tracer.Builder("JournalNode").
+//          conf(TraceUtils.wrapHadoopConf("journalnode.htrace", conf)).
+//          build();
+      if (!GlobalTracer.isRegistered()) {
+        com.uber.jaeger.Configuration jaegerConf =
+            new com.uber.jaeger.Configuration(
+                "JournalNode",
+                new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
+                new com.uber.jaeger.Configuration.ReporterConfiguration(
+                    false, "va1022.halxg.cloudera.com", 6831, 1000, 10000)
+            );
+        io.opentracing.Tracer tracer = jaegerConf.getTracer();
+        GlobalTracer.register(tracer);
+      }
+      this.tracer = GlobalTracer.get();
     }
   }
 
@@ -270,7 +284,7 @@ public class JournalNode implements Tool, Configurable, JournalNodeMXBean {
       journalNodeInfoBeanName = null;
     }
     if (tracer != null) {
-      tracer.close();
+//      tracer.close();
       tracer = null;
     }
   }
