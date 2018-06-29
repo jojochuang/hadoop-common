@@ -29,6 +29,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import io.opentracing.Scope;
+import io.opentracing.Tracer;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.ReadOption;
@@ -51,8 +53,6 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.util.DirectBufferPool;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -377,8 +377,8 @@ class BlockReaderLocalLegacy implements BlockReader {
    */
   private int fillBuffer(FileInputStream stream, ByteBuffer buf)
       throws IOException {
-    try (TraceScope ignored = tracer.
-        newScope("BlockReaderLocalLegacy#fillBuffer(" + blockId + ")")) {
+    try (Scope ignored = tracer.
+        buildSpan("BlockReaderLocalLegacy#fillBuffer(" + blockId + ")").startActive(true)) {
       int bytesRead = stream.getChannel().read(buf);
       if (bytesRead < 0) {
         //EOF

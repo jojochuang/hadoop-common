@@ -23,6 +23,7 @@ import static org.junit.Assume.assumeTrue;
 import java.io.File;
 import java.io.IOException;
 
+import io.opentracing.Scope;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FsTracer;
@@ -87,13 +88,13 @@ public class TestTracingShortCircuitLocalRead {
     try {
       DFSTestUtil.createFile(dfs, TEST_PATH, TEST_LENGTH, (short)1, 5678L);
 
-      TraceScope ts = FsTracer.get(conf).
-          newScope("testShortCircuitTraceHooks");
-      FSDataInputStream stream = dfs.open(TEST_PATH);
-      byte buf[] = new byte[TEST_LENGTH];
-      IOUtils.readFully(stream, buf, 0, TEST_LENGTH);
-      stream.close();
-      ts.close();
+      try(Scope ts = FsTracer.get(conf).
+          buildSpan("testShortCircuitTraceHooks").startActive(true)) {
+        FSDataInputStream stream = dfs.open(TEST_PATH);
+        byte buf[] = new byte[TEST_LENGTH];
+        IOUtils.readFully(stream, buf, 0, TEST_LENGTH);
+        stream.close();
+      }
 
       String[] expectedSpanNames = {
         "OpRequestShortCircuitAccessProto",

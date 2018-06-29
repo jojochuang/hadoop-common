@@ -20,6 +20,8 @@ package org.apache.hadoop.hdfs.protocol;
 
 import java.io.IOException;
 
+import io.opentracing.Scope;
+import io.opentracing.Tracer;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.BatchedRemoteIterator;
@@ -27,8 +29,6 @@ import org.apache.hadoop.fs.InvalidRequestException;
 import org.apache.hadoop.ipc.RemoteException;
 
 import com.google.common.base.Preconditions;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
 
 /**
  * CacheDirectiveIterator is a remote iterator that iterates cache directives.
@@ -93,7 +93,8 @@ public class CacheDirectiveIterator
   public BatchedEntries<CacheDirectiveEntry> makeRequest(Long prevKey)
       throws IOException {
     BatchedEntries<CacheDirectiveEntry> entries;
-    try (TraceScope ignored = tracer.newScope("listCacheDirectives")) {
+    try (Scope ignored = tracer.buildSpan("listCacheDirectives")
+        .startActive(true)) {
       entries = namenode.listCacheDirectives(prevKey, filter);
     } catch (IOException e) {
       if (e.getMessage().contains("Filtering by ID is unsupported")) {

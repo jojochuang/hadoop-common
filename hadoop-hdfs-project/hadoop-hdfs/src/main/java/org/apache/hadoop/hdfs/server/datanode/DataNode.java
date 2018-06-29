@@ -400,17 +400,21 @@ public class DataNode extends ReconfigurableBase
   private final SocketFactory socketFactory;
 
   private static Tracer createTracer(Configuration conf) {
+    if (!GlobalTracer.isRegistered()) {
+      com.uber.jaeger.Configuration jaegerConf =
+          new com.uber.jaeger.Configuration(
+              "DataNode",
+              new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
+              new com.uber.jaeger.Configuration.ReporterConfiguration(
+                  false, "va1022.halxg.cloudera.com", 6831, 1000, 10000)
+          );
+      io.opentracing.Tracer tracer = jaegerConf.getTracer();
+      GlobalTracer.register(tracer);
+    }
+
     return new Tracer.Builder("DataNode").
         conf(TraceUtils.wrapHadoopConf(DATANODE_HTRACE_PREFIX , conf)).
         build();
-
-    /*GlobalTracer.register(
-        new Configuration(
-            "DataNode",
-            new Configuration.SamplerConfiguration("const", 1),
-            new Configuration.ReporterConfiguration(
-                false, "localhost", null, 1000, 10000)
-        ).getTracer());*/
   }
 
   private long[] oobTimeouts; /** timeout value of each OOB type */

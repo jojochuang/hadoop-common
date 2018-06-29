@@ -20,11 +20,11 @@ package org.apache.hadoop.hdfs.protocol;
 
 import java.io.IOException;
 
+import io.opentracing.Scope;
+import io.opentracing.Tracer;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.BatchedRemoteIterator;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
 
 /**
  * CachePoolIterator is a remote iterator that iterates cache pools.
@@ -38,7 +38,7 @@ public class CachePoolIterator
   private final ClientProtocol namenode;
   private final Tracer tracer;
 
-  public CachePoolIterator(ClientProtocol namenode, Tracer tracer) {
+  public CachePoolIterator(ClientProtocol namenode, io.opentracing.Tracer tracer) {
     super("");
     this.namenode = namenode;
     this.tracer = tracer;
@@ -47,7 +47,7 @@ public class CachePoolIterator
   @Override
   public BatchedEntries<CachePoolEntry> makeRequest(String prevKey)
       throws IOException {
-    try (TraceScope ignored = tracer.newScope("listCachePools")) {
+    try (Scope scope = tracer.buildSpan("listCachePools").startActive(true)) {
       return namenode.listCachePools(prevKey);
     }
   }

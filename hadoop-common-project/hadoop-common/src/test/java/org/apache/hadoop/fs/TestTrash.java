@@ -33,6 +33,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import io.opentracing.Tracer;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;

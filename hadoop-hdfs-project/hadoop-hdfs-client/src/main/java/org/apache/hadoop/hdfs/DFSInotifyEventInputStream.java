@@ -19,6 +19,9 @@
 package org.apache.hadoop.hdfs;
 
 import java.util.Collections;
+
+import io.opentracing.Scope;
+import io.opentracing.Tracer;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.hdfs.inotify.EventBatch;
@@ -26,8 +29,6 @@ import org.apache.hadoop.hdfs.inotify.EventBatchList;
 import org.apache.hadoop.hdfs.inotify.MissingEventsException;
 import org.apache.hadoop.hdfs.protocol.ClientProtocol;
 import org.apache.hadoop.util.Time;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,7 +95,7 @@ public class DFSInotifyEventInputStream {
    * The next available batch of events will be returned.
    */
   public EventBatch poll() throws IOException, MissingEventsException {
-    try (TraceScope ignored = tracer.newScope("inotifyPoll")) {
+    try (Scope ignored = tracer.buildSpan("inotifyPoll").startActive(true)) {
       // need to keep retrying until the NN sends us the latest committed txid
       if (lastReadTxid == -1) {
         LOG.debug("poll(): lastReadTxid is -1, reading current txid from NN");
@@ -173,7 +174,7 @@ public class DFSInotifyEventInputStream {
   public EventBatch poll(long time, TimeUnit tu) throws IOException,
       InterruptedException, MissingEventsException {
     EventBatch next;
-    try (TraceScope ignored = tracer.newScope("inotifyPollWithTimeout")) {
+    try (Scope ignored = tracer.buildSpan("inotifyPollWithTimeout").startActive(true)) {
       long initialTime = Time.monotonicNow();
       long totalWait = TimeUnit.MILLISECONDS.convert(time, tu);
       long nextWait = INITIAL_WAIT_MS;
@@ -207,7 +208,7 @@ public class DFSInotifyEventInputStream {
   public EventBatch take() throws IOException, InterruptedException,
       MissingEventsException {
     EventBatch next;
-    try (TraceScope ignored = tracer.newScope("inotifyTake")) {
+    try (Scope ignored = tracer.buildSpan("inotifyTake").startActive(true)) {
       int nextWaitMin = INITIAL_WAIT_MS;
       while ((next = poll()) == null) {
         // sleep for a random period between nextWaitMin and nextWaitMin * 2

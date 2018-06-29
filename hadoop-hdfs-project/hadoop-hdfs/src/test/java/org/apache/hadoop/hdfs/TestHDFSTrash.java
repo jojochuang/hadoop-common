@@ -24,6 +24,9 @@ import static org.junit.Assert.fail;
 import java.io.IOException;
 import java.util.UUID;
 
+import io.opentracing.Scope;
+import io.opentracing.Tracer;
+import io.opentracing.util.GlobalTracer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -65,41 +68,57 @@ public class TestHDFSTrash {
   private static UserGroupInformation user1;
   private static UserGroupInformation user2;
 
+  private static Tracer tracer;
+  private static Scope scope;
+
   @BeforeClass
   public static void setUp() throws Exception {
-    cluster = new MiniDFSCluster.Builder(conf).numDataNodes(2).build();
-    fs = FileSystem.get(conf);
+    tracer =
+        new com.uber.jaeger.Configuration(
+            "HDFS test",
+            new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
+            new com.uber.jaeger.Configuration.ReporterConfiguration(
+                false, "va1022.halxg.cloudera.com", 6831, 1000, 10000)
+        ).getTracer();
+    if (!GlobalTracer.isRegistered()) {
+      GlobalTracer.register(tracer);
+    }
+    scope = tracer.buildSpan("TestHDFSTrash").startActive(true);
 
-    superUser = UserGroupInformation.getCurrentUser();
-    user1 = UserGroupInformation.createUserForTesting(USER1_NAME,
-        new String[] {GROUP1_NAME, GROUP2_NAME});
-    user2 = UserGroupInformation.createUserForTesting(USER2_NAME,
-        new String[] {GROUP2_NAME, GROUP3_NAME});
+    try (Scope setupScope = tracer.buildSpan("setup").startActive(true)) {
+      cluster = new MiniDFSCluster.Builder(conf).numDataNodes(2).build();
+      fs = FileSystem.get(conf);
 
-    // Init test and trash root dirs in HDFS
-    fs.mkdirs(TEST_ROOT);
-    fs.setPermission(TEST_ROOT, new FsPermission((short) 0777));
-    DFSTestUtil.verifyFilePermission(
-        fs.getFileStatus(TEST_ROOT),
-        superUser.getShortUserName(),
-        null, FsAction.ALL, FsAction.ALL, FsAction.ALL);
+      superUser = UserGroupInformation.getCurrentUser();
+      user1 = UserGroupInformation.createUserForTesting(USER1_NAME,
+          new String[] { GROUP1_NAME, GROUP2_NAME });
+      user2 = UserGroupInformation.createUserForTesting(USER2_NAME,
+          new String[] { GROUP2_NAME, GROUP3_NAME });
 
-    fs.mkdirs(TRASH_ROOT);
-    fs.setPermission(TRASH_ROOT, new FsPermission((short) 0777));
-    DFSTestUtil.verifyFilePermission(
-        fs.getFileStatus(TRASH_ROOT),
-        superUser.getShortUserName(),
-        null, FsAction.ALL, FsAction.ALL, FsAction.ALL);
+      // Init test and trash root dirs in HDFS
+      fs.mkdirs(TEST_ROOT);
+      fs.setPermission(TEST_ROOT, new FsPermission((short) 0777));
+      DFSTestUtil.verifyFilePermission(fs.getFileStatus(TEST_ROOT), superUser.getShortUserName(),
+          null, FsAction.ALL, FsAction.ALL, FsAction.ALL);
+
+      fs.mkdirs(TRASH_ROOT);
+      fs.setPermission(TRASH_ROOT, new FsPermission((short) 0777));
+      DFSTestUtil.verifyFilePermission(fs.getFileStatus(TRASH_ROOT), superUser.getShortUserName(),
+          null, FsAction.ALL, FsAction.ALL, FsAction.ALL);
+    }
   }
 
   @AfterClass
   public static void tearDown() {
     if (cluster != null) { cluster.shutdown(); }
+    scope.close();
   }
 
   @Test
   public void testTrash() throws IOException {
-    TestTrash.trashShell(cluster.getFileSystem(), new Path("/"));
+    try (Scope scope = tracer.buildSpan("testTrash").startActive(true)) {
+      TestTrash.trashShell(cluster.getFileSystem(), new Path("/"));
+    }
   }
 
   @Test

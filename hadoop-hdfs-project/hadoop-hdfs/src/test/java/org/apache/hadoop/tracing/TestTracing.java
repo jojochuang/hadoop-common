@@ -75,9 +75,9 @@ public class TestTracing {
     writeTestFile("testReadTraceHooks.dat");
 
     FsTracer.clear();
-    Tracer tracer = FsTracer.get(TRACING_CONF);
+    /*Tracer tracer = FsTracer.get(TRACING_CONF);
     writeWithTracing(tracer);
-    readWithTracing(tracer);
+    readWithTracing(tracer);*/
   }
 
   private void writeWithTracing(Tracer tracer) throws Exception {

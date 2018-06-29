@@ -44,6 +44,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import io.opentracing.Scope;
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.fs.ByteBufferReadable;
@@ -809,7 +810,7 @@ public class DFSInputStream extends FSInputStream
     }
     ReaderStrategy byteArrayReader =
         new ByteArrayStrategy(buf, off, len, readStatistics, dfsClient);
-    try (TraceScope scope =
+    try (Scope scope =
              dfsClient.newReaderTraceScope("DFSInputStream#byteArrayRead",
                  src, getPos(), len)) {
       int retLen = readWithStrategy(byteArrayReader);
@@ -825,7 +826,7 @@ public class DFSInputStream extends FSInputStream
     ReaderStrategy byteBufferReader =
         new ByteBufferStrategy(buf, readStatistics, dfsClient);
     int reqLen = buf.remaining();
-    try (TraceScope scope =
+    try (Scope scope =
              dfsClient.newReaderTraceScope("DFSInputStream#byteBufferRead",
                  src, getPos(), reqLen)){
       int retLen = readWithStrategy(byteBufferReader);
@@ -1019,8 +1020,10 @@ public class DFSInputStream extends FSInputStream
       @Override
       public ByteBuffer call() throws Exception {
         DFSClientFaultInjector.get().sleepBeforeHedgedGet();
-        try (TraceScope ignored = dfsClient.getTracer().
-            newScope("hedgedRead" + hedgedReadId, parentSpanId)) {
+        /*try (TraceScope ignored = dfsClient.getTracer().
+            newScope("hedgedRead" + hedgedReadId, parentSpanId)) {*/
+        try (Scope ignored = dfsClient.getTracer().buildSpan(
+            "hedgedRead" + hedgedReadId).startActive(true)) {
           actualGetFromOneDataNode(datanode, start, end, bb, corruptedBlocks);
           return bb;
         }
@@ -1321,7 +1324,7 @@ public class DFSInputStream extends FSInputStream
     if (length == 0) {
       return 0;
     }
-    try (TraceScope scope = dfsClient.
+    try (Scope scope = dfsClient.
         newReaderTraceScope("DFSInputStream#byteArrayPread",
             src, position, length)) {
       ByteBuffer bb = ByteBuffer.wrap(buffer, offset, length);

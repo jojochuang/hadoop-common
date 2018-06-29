@@ -700,9 +700,9 @@ class DataStreamer extends Daemon {
             one = dataQueue.getFirst(); // regular data packet
             SpanId[] parents = one.getTraceParents();
             if (parents.length > 0) {
-              scope = dfsClient.getTracer().
+              /*scope = dfsClient.getTracer().
                   newScope("dataStreamer", parents[0]);
-              scope.getSpan().setParents(parents);
+              scope.getSpan().setParents(parents);*/
             }
           }
         }
@@ -769,8 +769,8 @@ class DataStreamer extends Daemon {
         LOG.debug("{} sending {}", this, one);
 
         // write out data to remote datanode
-        try (TraceScope ignored = dfsClient.getTracer().
-            newScope("DataStreamer#writeTo", spanId)) {
+        try /*(TraceScope ignored = dfsClient.getTracer().
+            newScope("DataStreamer#writeTo", spanId)) */{
           one.writeTo(blockStream);
           blockStream.flush();
         } catch (IOException e) {
@@ -871,8 +871,8 @@ class DataStreamer extends Daemon {
    * @throws IOException
    */
   void waitForAckedSeqno(long seqno) throws IOException {
-    try (TraceScope ignored = dfsClient.getTracer().
-        newScope("waitForAckedSeqno")) {
+    /*try (TraceScope ignored = dfsClient.getTracer().
+        newScope("waitForAckedSeqno")) {*/
       LOG.debug("{} waiting for ack for: {}", this, seqno);
       long begin = Time.monotonicNow();
       try {
@@ -900,7 +900,7 @@ class DataStreamer extends Daemon {
                 + " written: {}, block: {}, Write pipeline datanodes: {}.",
             duration, dfsclientSlowLogThresholdMs, src, block, nodes);
       }
-    }
+    /*}*/
   }
 
   /**

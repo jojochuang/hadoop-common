@@ -314,7 +314,9 @@ public class FsShell extends Configured implements Tool {
             new com.uber.jaeger.Configuration.ReporterConfiguration(
                 false, "va1022.halxg.cloudera.com", 6831, 1000, 10000)
         ).getTracer();
-    //GlobalTracer.register(tracer);
+    if (!GlobalTracer.isRegistered()) {
+      GlobalTracer.register(tracer);
+    }
 
     int exitCode = -1;
     if (argv.length < 1) {

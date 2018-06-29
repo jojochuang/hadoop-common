@@ -51,6 +51,7 @@ public final class FsTracer {
               new com.uber.jaeger.Configuration.ReporterConfiguration(
                   false, "va1022.halxg.cloudera.com", 6831, 1000, 10000)
           ).getTracer();
+      return instance;
     }
     return instance;
   }

@@ -205,7 +205,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public static final Logger LOG = LoggerFactory.getLogger(DFSClient.class);
 
   private final Configuration conf;
-  private final Tracer tracer;
+  private final io.opentracing.Tracer tracer;
   private final DfsClientConf dfsClientConf;
   final ClientProtocol namenode;
   /* The service used for delegation tokens */
@@ -646,7 +646,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public long getBlockSize(String f) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("getBlockSize", f)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("getBlockSize", f)) {
       return namenode.getPreferredBlockSize(f);
     } catch (IOException ie) {
       LOG.warn("Problem getting block size", ie);
@@ -686,7 +686,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public Token<DelegationTokenIdentifier> getDelegationToken(Text renewer)
       throws IOException {
     assert dtService != null;
-    try (TraceScope ignored = tracer.newScope("getDelegationToken")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("getDelegationToken").startActive(true)) {
       Token<DelegationTokenIdentifier> token =
           namenode.getDelegationToken(renewer);
       if (token != null) {
@@ -838,7 +838,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   @VisibleForTesting
   public LocatedBlocks getLocatedBlocks(String src, long start, long length)
       throws IOException {
-    try (TraceScope ignored = newPathTraceScope("getBlockLocations", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("getBlockLocations", src)) {
       return callGetBlockLocations(namenode, src, start, length);
     }
   }
@@ -867,7 +867,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   boolean recoverLease(String src) throws IOException {
     checkOpen();
 
-    try (TraceScope ignored = newPathTraceScope("recoverLease", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("recoverLease", src)) {
       return namenode.recoverLease(src, clientName);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(FileNotFoundException.class,
@@ -895,7 +895,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public BlockLocation[] getBlockLocations(String src, long start,
       long length) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("getBlockLocations", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("getBlockLocations", src)) {
       LocatedBlocks blocks = getLocatedBlocks(src, start, length);
       BlockLocation[] locations = DFSUtilClient.locatedBlocks2Locations(blocks);
       HdfsBlockLocation[] hdfsLocations =
@@ -912,7 +912,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   private KeyVersion decryptEncryptedDataEncryptionKey(FileEncryptionInfo
       feInfo) throws IOException {
-    try (TraceScope ignored = tracer.newScope("decryptEDEK")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("decryptEDEK").startActive(true)) {
       KeyProvider provider = getKeyProvider();
       if (provider == null) {
         throw new IOException("No KeyProvider is configured, cannot access" +
@@ -1014,7 +1014,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
       throws IOException {
     checkOpen();
     //    Get block info from namenode
-    try (TraceScope ignored = newPathTraceScope("newDFSInputStream", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("newDFSInputStream", src)) {
       LocatedBlocks locatedBlocks = getLocatedBlocks(src, 0);
       if (locatedBlocks != null) {
         ErasureCodingPolicy ecPolicy = locatedBlocks.getErasureCodingPolicy();
@@ -1263,7 +1263,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void createSymlink(String target, String link, boolean createParent)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("createSymlink", target)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("createSymlink", target)) {
       final FsPermission dirPerm = applyUMask(null);
       namenode.createSymlink(target, link, dirPerm, createParent);
     } catch (RemoteException re) {
@@ -1286,7 +1286,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public String getLinkTarget(String path) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("getLinkTarget", path)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("getLinkTarget", path)) {
       return namenode.getLinkTarget(path);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -1410,7 +1410,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public boolean setReplication(String src, short replication)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("setReplication", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("setReplication", src)) {
       return namenode.setReplication(src, replication);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -1431,7 +1431,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void setStoragePolicy(String src, String policyName)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("setStoragePolicy", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("setStoragePolicy", src)) {
       namenode.setStoragePolicy(src, policyName);
     } catch (RemoteException e) {
       throw e.unwrapRemoteException(AccessControlException.class,
@@ -1449,7 +1449,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public void unsetStoragePolicy(String src) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("unsetStoragePolicy", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("unsetStoragePolicy", src)) {
       namenode.unsetStoragePolicy(src);
     } catch (RemoteException e) {
       throw e.unwrapRemoteException(AccessControlException.class,
@@ -1467,7 +1467,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public BlockStoragePolicy getStoragePolicy(String path) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("getStoragePolicy", path)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("getStoragePolicy", path)) {
       return namenode.getStoragePolicy(path);
     } catch (RemoteException e) {
       throw e.unwrapRemoteException(AccessControlException.class,
@@ -1482,7 +1482,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public BlockStoragePolicy[] getStoragePolicies() throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("getStoragePolicies")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("getStoragePolicies").startActive(true)) {
       return namenode.getStoragePolicies();
     }
   }
@@ -1495,7 +1495,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   @Deprecated
   public boolean rename(String src, String dst) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newSrcDstTraceScope("rename", src, dst)) {
+    try (io.opentracing.Scope ignored = newSrcDstTraceScope("rename", src, dst)) {
       return namenode.rename(src, dst);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -1513,7 +1513,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public void concat(String trg, String [] srcs) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("concat")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("concat").startActive(true)) {
       namenode.concat(trg, srcs);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -1528,7 +1528,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void rename(String src, String dst, Options.Rename... options)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = newSrcDstTraceScope("rename2", src, dst)) {
+    try (io.opentracing.Scope ignored = newSrcDstTraceScope("rename2", src, dst)) {
       namenode.rename2(src, dst, options);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -1554,7 +1554,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
       throw new HadoopIllegalArgumentException(
           "Cannot truncate to a negative file size: " + newLength + ".");
     }
-    try (TraceScope ignored = newPathTraceScope("truncate", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("truncate", src)) {
       return namenode.truncate(src, newLength, clientName);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -1581,7 +1581,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public boolean delete(String src, boolean recursive) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("delete", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("delete", src)) {
       return namenode.delete(src, recursive);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -1620,7 +1620,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public DirectoryListing listPaths(String src,  byte[] startAfter,
       boolean needLocation) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("listPaths", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("listPaths", src)) {
       return namenode.getListing(src, startAfter, needLocation);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -1639,7 +1639,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public HdfsFileStatus getFileInfo(String src) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("getFileInfo", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("getFileInfo", src)) {
       return namenode.getFileInfo(src);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -1654,7 +1654,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public boolean isFileClosed(String src) throws IOException{
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("isFileClosed", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("isFileClosed", src)) {
       return namenode.isFileClosed(src);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -1673,7 +1673,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public HdfsFileStatus getFileLinkInfo(String src) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("getFileLinkInfo", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("getFileLinkInfo", src)) {
       return namenode.getFileLinkInfo(src);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -1821,7 +1821,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void setPermission(String src, FsPermission permission)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("setPermission", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("setPermission", src)) {
       namenode.setPermission(src, permission);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -1843,7 +1843,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void setOwner(String src, String username, String groupname)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("setOwner", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("setOwner", src)) {
       namenode.setOwner(src, username, groupname);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -1856,7 +1856,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   private long getStateByIndex(int stateIndex) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("getStats")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("getStats").startActive(true)) {
       long[] states =  namenode.getStats();
       return states.length > stateIndex ? states[stateIndex] : -1;
     }
@@ -1934,7 +1934,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public CorruptFileBlocks listCorruptFileBlocks(String path, String cookie)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored
+    try (io.opentracing.Scope ignored
              = newPathTraceScope("listCorruptFileBlocks", path)) {
       return namenode.listCorruptFileBlocks(path, cookie);
     }
@@ -1943,7 +1943,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public DatanodeInfo[] datanodeReport(DatanodeReportType type)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("datanodeReport")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("datanodeReport").startActive(true)) {
       return namenode.getDatanodeReport(type);
     }
   }
@@ -1951,7 +1951,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public DatanodeStorageReport[] getDatanodeStorageReport(
       DatanodeReportType type) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("datanodeStorageReport")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("datanodeStorageReport").startActive(true)) {
       return namenode.getDatanodeStorageReport(type);
     }
   }
@@ -1979,7 +1979,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public boolean setSafeMode(SafeModeAction action, boolean isChecked)
       throws IOException{
-    try (TraceScope ignored = tracer.newScope("setSafeMode")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("setSafeMode").startActive(true)) {
       return namenode.setSafeMode(action, isChecked);
     }
   }
@@ -1995,7 +1995,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public String createSnapshot(String snapshotRoot, String snapshotName)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("createSnapshot")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("createSnapshot").startActive(true)) {
       return namenode.createSnapshot(snapshotRoot, snapshotName);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException();
@@ -2014,7 +2014,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void deleteSnapshot(String snapshotRoot, String snapshotName)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("deleteSnapshot")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("deleteSnapshot").startActive(true)) {
       namenode.deleteSnapshot(snapshotRoot, snapshotName);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException();
@@ -2032,7 +2032,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void renameSnapshot(String snapshotDir, String snapshotOldName,
       String snapshotNewName) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("renameSnapshot")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("renameSnapshot").startActive(true)) {
       namenode.renameSnapshot(snapshotDir, snapshotOldName, snapshotNewName);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException();
@@ -2048,7 +2048,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public SnapshottableDirectoryStatus[] getSnapshottableDirListing()
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("getSnapshottableDirListing")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("getSnapshottableDirListing").startActive(true)) {
       return namenode.getSnapshottableDirListing();
     } catch (RemoteException re) {
       throw re.unwrapRemoteException();
@@ -2062,7 +2062,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public void allowSnapshot(String snapshotRoot) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("allowSnapshot")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("allowSnapshot").startActive(true)) {
       namenode.allowSnapshot(snapshotRoot);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException();
@@ -2076,7 +2076,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public void disallowSnapshot(String snapshotRoot) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("disallowSnapshot")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("disallowSnapshot").startActive(true)) {
       namenode.disallowSnapshot(snapshotRoot);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException();
@@ -2091,7 +2091,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public SnapshotDiffReport getSnapshotDiffReport(String snapshotDir,
       String fromSnapshot, String toSnapshot) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("getSnapshotDiffReport")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("getSnapshotDiffReport").startActive(true)) {
       return namenode.getSnapshotDiffReport(snapshotDir,
           fromSnapshot, toSnapshot);
     } catch (RemoteException re) {
@@ -2102,7 +2102,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public long addCacheDirective(
       CacheDirectiveInfo info, EnumSet<CacheFlag> flags) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("addCacheDirective")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("addCacheDirective").startActive(true)) {
       return namenode.addCacheDirective(info, flags);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException();
@@ -2112,7 +2112,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void modifyCacheDirective(
       CacheDirectiveInfo info, EnumSet<CacheFlag> flags) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("modifyCacheDirective")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("modifyCacheDirective").startActive(true)) {
       namenode.modifyCacheDirective(info, flags);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException();
@@ -2122,7 +2122,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void removeCacheDirective(long id)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("removeCacheDirective")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("removeCacheDirective").startActive(true)) {
       namenode.removeCacheDirective(id);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException();
@@ -2137,7 +2137,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   public void addCachePool(CachePoolInfo info) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("addCachePool")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("addCachePool").startActive(true)) {
       namenode.addCachePool(info);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException();
@@ -2146,7 +2146,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   public void modifyCachePool(CachePoolInfo info) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("modifyCachePool")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("modifyCachePool").startActive(true)) {
       namenode.modifyCachePool(info);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException();
@@ -2155,7 +2155,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   public void removeCachePool(String poolName) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("removeCachePool")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("removeCachePool").startActive(true)) {
       namenode.removeCachePool(poolName);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException();
@@ -2174,7 +2174,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   boolean saveNamespace(long timeWindow, long txGap) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("saveNamespace")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("saveNamespace").startActive(true)) {
       return namenode.saveNamespace(timeWindow, txGap);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class);
@@ -2189,7 +2189,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   long rollEdits() throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("rollEdits")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("rollEdits").startActive(true)) {
       return namenode.rollEdits();
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class);
@@ -2208,7 +2208,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   boolean restoreFailedStorage(String arg) throws IOException{
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("restoreFailedStorage")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("restoreFailedStorage").startActive(true)) {
       return namenode.restoreFailedStorage(arg);
     }
   }
@@ -2222,7 +2222,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public void refreshNodes() throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("refreshNodes")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("refreshNodes").startActive(true)) {
       namenode.refreshNodes();
     }
   }
@@ -2234,7 +2234,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public void metaSave(String pathname) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("metaSave")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("metaSave").startActive(true)) {
       namenode.metaSave(pathname);
     }
   }
@@ -2249,7 +2249,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public void setBalancerBandwidth(long bandwidth) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("setBalancerBandwidth")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("setBalancerBandwidth").startActive(true)) {
       namenode.setBalancerBandwidth(bandwidth);
     }
   }
@@ -2259,7 +2259,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public void finalizeUpgrade() throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("finalizeUpgrade")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("finalizeUpgrade").startActive(true)) {
       namenode.finalizeUpgrade();
     }
   }
@@ -2267,7 +2267,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   RollingUpgradeInfo rollingUpgrade(RollingUpgradeAction action)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("rollingUpgrade")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("rollingUpgrade").startActive(true)) {
       return namenode.rollingUpgrade(action);
     }
   }
@@ -2318,7 +2318,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
       absPermission = applyUMaskDir(null);
     }
     LOG.debug("{}: masked={}", src, absPermission);
-    try (TraceScope ignored = tracer.newScope("mkdir")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("mkdir").startActive(true)) {
       return namenode.mkdirs(src, absPermission, createParent);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2343,7 +2343,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   ContentSummary getContentSummary(String src) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("getContentSummary", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("getContentSummary", src)) {
       return namenode.getContentSummary(src);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2360,7 +2360,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   QuotaUsage getQuotaUsage(String src) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("getQuotaUsage", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("getQuotaUsage", src)) {
       return namenode.getQuotaUsage(src);
     } catch(RemoteException re) {
       IOException ioe = re.unwrapRemoteException(AccessControlException.class,
@@ -2396,7 +2396,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
           storagespaceQuota);
 
     }
-    try (TraceScope ignored = newPathTraceScope("setQuota", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("setQuota", src)) {
       // Pass null as storage type for traditional namespace/storagespace quota.
       namenode.setQuota(src, namespaceQuota, storagespaceQuota, null);
     } catch (RemoteException re) {
@@ -2429,7 +2429,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
       throw new IllegalArgumentException(
           "Don't support Quota for storage type : " + type.toString());
     }
-    try (TraceScope ignored = newPathTraceScope("setQuotaByStorageType", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("setQuotaByStorageType", src)) {
       namenode.setQuota(src, HdfsConstants.QUOTA_DONT_SET, quota, type);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2446,7 +2446,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public void setTimes(String src, long mtime, long atime) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("setTimes", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("setTimes", src)) {
       namenode.setTimes(src, mtime, atime);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2504,7 +2504,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void modifyAclEntries(String src, List<AclEntry> aclSpec)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("modifyAclEntries", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("modifyAclEntries", src)) {
       namenode.modifyAclEntries(src, aclSpec);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2520,7 +2520,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void removeAclEntries(String src, List<AclEntry> aclSpec)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("removeAclEntries")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("removeAclEntries").startActive(true)) {
       namenode.removeAclEntries(src, aclSpec);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2535,7 +2535,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   public void removeDefaultAcl(String src) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("removeDefaultAcl")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("removeDefaultAcl").startActive(true)) {
       namenode.removeDefaultAcl(src);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2550,7 +2550,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   public void removeAcl(String src) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("removeAcl")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("removeAcl").startActive(true)) {
       namenode.removeAcl(src);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2565,7 +2565,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   public void setAcl(String src, List<AclEntry> aclSpec) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("setAcl")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("setAcl").startActive(true)) {
       namenode.setAcl(src, aclSpec);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2580,7 +2580,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   public AclStatus getAclStatus(String src) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("getAclStatus", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("getAclStatus", src)) {
       return namenode.getAclStatus(src);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2593,7 +2593,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void createEncryptionZone(String src, String keyName)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("createEncryptionZone", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("createEncryptionZone", src)) {
       namenode.createEncryptionZone(src, keyName);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2604,7 +2604,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   public EncryptionZone getEZForPath(String src) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("getEZForPath", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("getEZForPath", src)) {
       return namenode.getEZForPath(src);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2621,7 +2621,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void reencryptEncryptionZone(String zone, ReencryptAction action)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("reencryptEncryptionZone",
+    try (io.opentracing.Scope ignored = newPathTraceScope("reencryptEncryptionZone",
         zone)) {
       namenode.reencryptEncryptionZone(zone, action);
     } catch (RemoteException re) {
@@ -2639,7 +2639,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void setErasureCodingPolicy(String src, String ecPolicyName)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored =
+    try (io.opentracing.Scope ignored =
              newPathTraceScope("setErasureCodingPolicy", src)) {
       namenode.setErasureCodingPolicy(src, ecPolicyName);
     } catch (RemoteException re) {
@@ -2652,7 +2652,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   public void unsetErasureCodingPolicy(String src) throws IOException {
     checkOpen();
-    try (TraceScope ignored =
+    try (io.opentracing.Scope ignored =
              newPathTraceScope("unsetErasureCodingPolicy", src)) {
       namenode.unsetErasureCodingPolicy(src);
     } catch (RemoteException re) {
@@ -2666,7 +2666,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void setXAttr(String src, String name, byte[] value,
       EnumSet<XAttrSetFlag> flag) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("setXAttr", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("setXAttr", src)) {
       namenode.setXAttr(src, XAttrHelper.buildXAttr(name, value), flag);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2680,7 +2680,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   public byte[] getXAttr(String src, String name) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("getXAttr", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("getXAttr", src)) {
       final List<XAttr> xAttrs = XAttrHelper.buildXAttrAsList(name);
       final List<XAttr> result = namenode.getXAttrs(src, xAttrs);
       return XAttrHelper.getFirstXAttrValue(result);
@@ -2693,7 +2693,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   public Map<String, byte[]> getXAttrs(String src) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("getXAttrs", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("getXAttrs", src)) {
       return XAttrHelper.buildXAttrMap(namenode.getXAttrs(src, null));
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2705,7 +2705,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public Map<String, byte[]> getXAttrs(String src, List<String> names)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("getXAttrs", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("getXAttrs", src)) {
       return XAttrHelper.buildXAttrMap(namenode.getXAttrs(
           src, XAttrHelper.buildXAttrs(names)));
     } catch (RemoteException re) {
@@ -2717,7 +2717,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   public List<String> listXAttrs(String src) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("listXAttrs", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("listXAttrs", src)) {
       final Map<String, byte[]> xattrs =
           XAttrHelper.buildXAttrMap(namenode.listXAttrs(src));
       return Lists.newArrayList(xattrs.keySet());
@@ -2730,7 +2730,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   public void removeXAttr(String src, String name) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("removeXAttr", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("removeXAttr", src)) {
       namenode.removeXAttr(src, XAttrHelper.buildXAttr(name));
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2744,7 +2744,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
 
   public void checkAccess(String src, FsAction mode) throws IOException {
     checkOpen();
-    try (TraceScope ignored = newPathTraceScope("checkAccess", src)) {
+    try (io.opentracing.Scope ignored = newPathTraceScope("checkAccess", src)) {
       namenode.checkAccess(src, mode);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2756,14 +2756,14 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public ErasureCodingPolicyInfo[] getErasureCodingPolicies()
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("getErasureCodingPolicies")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("getErasureCodingPolicies").startActive(true)) {
       return namenode.getErasureCodingPolicies();
     }
   }
 
   public Map<String, String> getErasureCodingCodecs() throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("getErasureCodingCodecs")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("getErasureCodingCodecs").startActive(true)) {
       return namenode.getErasureCodingCodecs();
     }
   }
@@ -2771,7 +2771,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public AddErasureCodingPolicyResponse[] addErasureCodingPolicies(
       ErasureCodingPolicy[] policies) throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("addErasureCodingPolicies")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("addErasureCodingPolicies").startActive(true)) {
       return namenode.addErasureCodingPolicies(policies);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2782,7 +2782,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void removeErasureCodingPolicy(String ecPolicyName)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("removeErasureCodingPolicy")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("removeErasureCodingPolicy").startActive(true)) {
       namenode.removeErasureCodingPolicy(ecPolicyName);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2793,7 +2793,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void enableErasureCodingPolicy(String ecPolicyName)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("enableErasureCodingPolicy")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("enableErasureCodingPolicy").startActive(true)) {
       namenode.enableErasureCodingPolicy(ecPolicyName);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2804,7 +2804,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public void disableErasureCodingPolicy(String ecPolicyName)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored = tracer.newScope("disableErasureCodingPolicy")) {
+    try (io.opentracing.Scope ignored = tracer.buildSpan("disableErasureCodingPolicy").startActive(true)) {
       namenode.disableErasureCodingPolicy(ecPolicyName);
     } catch (RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,
@@ -2958,21 +2958,21 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
     return saslClient;
   }
 
-  TraceScope newPathTraceScope(String description, String path) {
-    TraceScope scope = tracer.newScope(description);
+  io.opentracing.Scope newPathTraceScope(String description, String path) {
+    io.opentracing.Scope scope = tracer.buildSpan(description).startActive(true);
     if (path != null) {
-      scope.addKVAnnotation("path", path);
+      scope.span().setTag("path", path);
     }
     return scope;
   }
 
-  TraceScope newSrcDstTraceScope(String description, String src, String dst) {
-    TraceScope scope = tracer.newScope(description);
+  io.opentracing.Scope newSrcDstTraceScope(String description, String src, String dst) {
+    io.opentracing.Scope scope = tracer.buildSpan(description).startActive(true);
     if (src != null) {
-      scope.addKVAnnotation("src", src);
+      scope.span().setTag("src", src);
     }
     if (dst != null) {
-      scope.addKVAnnotation("dst", dst);
+      scope.span().setTag("dst", dst);
     }
     return scope;
   }
@@ -2983,17 +2983,17 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    *
    * @param reqLen requested length
    */
-  TraceScope newReaderTraceScope(String description, String path, long pos,
+  io.opentracing.Scope newReaderTraceScope(String description, String path, long pos,
       int reqLen) {
-    TraceScope scope = newPathTraceScope(description, path);
-    scope.addKVAnnotation("pos", Long.toString(pos));
-    scope.addKVAnnotation("reqLen", Integer.toString(reqLen));
+    io.opentracing.Scope scope = newPathTraceScope(description, path);
+    scope.span().setTag("pos", Long.toString(pos));
+    scope.span().setTag("reqLen", Integer.toString(reqLen));
     return scope;
   }
 
   /** Add the returned length info to the scope. */
-  void addRetLenToReaderScope(TraceScope scope, int retLen) {
-    scope.addKVAnnotation("retLen", Integer.toString(retLen));
+  void addRetLenToReaderScope(io.opentracing.Scope scope, int retLen) {
+    scope.span().setTag("retLen", Integer.toString(retLen));
   }
 
   /**
@@ -3009,7 +3009,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   public ErasureCodingPolicy getErasureCodingPolicy(String src)
       throws IOException {
     checkOpen();
-    try (TraceScope ignored =
+    try (io.opentracing.Scope ignored =
              newPathTraceScope("getErasureCodingPolicy", src)) {
       return namenode.getErasureCodingPolicy(src);
     } catch (RemoteException re) {
@@ -3018,7 +3018,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
     }
   }
 
-  Tracer getTracer() {
+  io.opentracing.Tracer getTracer() {
     return tracer;
   }
 

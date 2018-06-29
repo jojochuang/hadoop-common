@@ -18,10 +18,10 @@
 
 package org.apache.hadoop.hdfs.protocol;
 
+import io.opentracing.Scope;
+import io.opentracing.Tracer;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.fs.BatchedRemoteIterator;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
 
 import java.io.IOException;
 
@@ -46,7 +46,7 @@ public class ReencryptionStatusIterator
   @Override
   public BatchedEntries<ZoneReencryptionStatus> makeRequest(Long prevId)
       throws IOException {
-    try (TraceScope ignored = tracer.newScope("listReencryptionStatus")) {
+    try (Scope ignored = tracer.buildSpan("listReencryptionStatus").startActive(true)) {
       return namenode.listReencryptionStatus(prevId);
     }
   }

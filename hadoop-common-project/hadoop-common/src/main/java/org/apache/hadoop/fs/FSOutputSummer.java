@@ -199,7 +199,7 @@ abstract public class FSOutputSummer extends OutputStream {
     return sum;
   }
 
-  protected io.opentracing.Tracer createWriteTraceScope() {
+  protected io.opentracing.Scope createWriteTraceScope() {
     return null;
   }
 
@@ -209,7 +209,7 @@ abstract public class FSOutputSummer extends OutputStream {
   private void writeChecksumChunks(byte b[], int off, int len)
   throws IOException {
     sum.calculateChunkedSums(b, off, len, checksum, 0);
-    io.opentracing.Tracer scope = createWriteTraceScope();
+    io.opentracing.Scope scope = createWriteTraceScope();
     try {
       for (int i = 0; i < len; i += sum.getBytesPerChecksum()) {
         int chunkLen = Math.min(sum.getBytesPerChecksum(), len - i);
