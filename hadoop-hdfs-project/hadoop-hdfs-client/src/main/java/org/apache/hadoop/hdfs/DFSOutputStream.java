@@ -259,7 +259,7 @@ public class DFSOutputStream extends FSOutputSummer
       short replication, long blockSize, Progressable progress,
       DataChecksum checksum, String[] favoredNodes, String ecPolicyName)
       throws IOException {
-    try (TraceScope ignored =
+    try (io.opentracing.Scope ignored =
              dfsClient.newPathTraceScope("newStreamForCreate", src)) {
       HdfsFileStatus stat = null;
 
@@ -390,7 +390,7 @@ public class DFSOutputStream extends FSOutputSummer
       throw new IOException(
           "Not support appending to a striping layout file yet.");
     }
-    try (TraceScope ignored =
+    try (io.opentracing.Scope ignored =
              dfsClient.newPathTraceScope("newStreamForAppend", src)) {
       final DFSOutputStream out = new DFSOutputStream(dfsClient, src, flags,
           progress, lastBlock, stat, checksum, favoredNodes);
@@ -409,7 +409,7 @@ public class DFSOutputStream extends FSOutputSummer
         src, chunkSize, chunksPerPacket, packetSize);
   }
 
-  protected TraceScope createWriteTraceScope() {
+  protected io.opentracing.Scope createWriteTraceScope() {
     return dfsClient.newPathTraceScope("DFSOutputStream#write", src);
   }
 
@@ -571,14 +571,14 @@ public class DFSOutputStream extends FSOutputSummer
    */
   @Override
   public void hflush() throws IOException {
-    try (TraceScope ignored = dfsClient.newPathTraceScope("hflush", src)) {
+    try (io.opentracing.Scope ignored = dfsClient.newPathTraceScope("hflush", src)) {
       flushOrSync(false, EnumSet.noneOf(SyncFlag.class));
     }
   }
 
   @Override
   public void hsync() throws IOException {
-    try (TraceScope ignored = dfsClient.newPathTraceScope("hsync", src)) {
+    try (io.opentracing.Scope ignored = dfsClient.newPathTraceScope("hsync", src)) {
       flushOrSync(true, EnumSet.noneOf(SyncFlag.class));
     }
   }
@@ -597,7 +597,7 @@ public class DFSOutputStream extends FSOutputSummer
    *          whether or not to update the block length in NameNode.
    */
   public void hsync(EnumSet<SyncFlag> syncFlags) throws IOException {
-    try (TraceScope ignored = dfsClient.newPathTraceScope("hsync", src)) {
+    try (io.opentracing.Scope ignored = dfsClient.newPathTraceScope("hsync", src)) {
       flushOrSync(true, syncFlags);
     }
   }
@@ -837,7 +837,7 @@ public class DFSOutputStream extends FSOutputSummer
   public void close() throws IOException {
     final MultipleIOException.Builder b = new MultipleIOException.Builder();
     synchronized (this) {
-      try (TraceScope ignored = dfsClient.newPathTraceScope(
+      try (io.opentracing.Scope ignored = dfsClient.newPathTraceScope(
           "DFSOutputStream#close", src)) {
         closeImpl();
       } catch (IOException e) {
@@ -871,8 +871,8 @@ public class DFSOutputStream extends FSOutputSummer
       // get last block before destroying the streamer
       ExtendedBlock lastBlock = getStreamer().getBlock();
 
-      try (TraceScope ignored =
-               dfsClient.getTracer().newScope("completeFile")) {
+      try (io.opentracing.Scope ignored =
+               dfsClient.getTracer().buildSpan("completeFile").startActive(true)) {
         completeFile(lastBlock);
       }
     } catch (ClosedChannelException ignored) {

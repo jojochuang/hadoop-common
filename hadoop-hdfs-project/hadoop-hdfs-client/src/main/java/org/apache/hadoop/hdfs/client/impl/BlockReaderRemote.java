@@ -28,6 +28,8 @@ import java.nio.channels.ReadableByteChannel;
 import java.util.EnumSet;
 import java.util.UUID;
 
+import io.opentracing.Scope;
+import io.opentracing.Tracer;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.fs.ReadOption;
 import org.apache.hadoop.hdfs.BlockReader;
@@ -49,11 +51,9 @@ import org.apache.hadoop.hdfs.server.datanode.CachingStrategy;
 import org.apache.hadoop.hdfs.shortcircuit.ClientMmap;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.DataChecksum;
-import org.apache.htrace.core.TraceScope;
 
 import com.google.common.annotations.VisibleForTesting;
 
-import org.apache.htrace.core.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -139,8 +139,8 @@ public class BlockReaderRemote implements BlockReader {
 
     if (curDataSlice == null ||
         curDataSlice.remaining() == 0 && bytesNeededToFinish > 0) {
-      try (TraceScope ignored = tracer.newScope(
-          "BlockReaderRemote2#readNextPacket(" + blockId + ")")) {
+      try (Scope ignored = tracer.buildSpan(
+          "BlockReaderRemote2#readNextPacket(" + blockId + ")").startActive(true)) {
         readNextPacket();
       }
     }
@@ -163,8 +163,8 @@ public class BlockReaderRemote implements BlockReader {
   public synchronized int read(ByteBuffer buf) throws IOException {
     if (curDataSlice == null ||
         (curDataSlice.remaining() == 0 && bytesNeededToFinish > 0)) {
-      try (TraceScope ignored = tracer.newScope(
-          "BlockReaderRemote2#readNextPacket(" + blockId + ")")) {
+      try (Scope ignored = tracer.buildSpan(
+          "BlockReaderRemote2#readNextPacket(" + blockId + ")").startActive(true)) {
         readNextPacket();
       }
     }

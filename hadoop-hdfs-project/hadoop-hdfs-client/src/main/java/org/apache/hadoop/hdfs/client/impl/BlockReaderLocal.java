@@ -19,6 +19,8 @@ package org.apache.hadoop.hdfs.client.impl;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import io.opentracing.Scope;
+import io.opentracing.Tracer;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.fs.ReadOption;
 import org.apache.hadoop.fs.StorageType;
@@ -35,8 +37,6 @@ import org.apache.hadoop.hdfs.shortcircuit.ShortCircuitReplica;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.util.DirectBufferPool;
 import org.apache.hadoop.util.Timer;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -360,8 +360,8 @@ class BlockReaderLocal implements BlockReader {
    */
   private synchronized int fillBuffer(ByteBuffer buf, boolean canSkipChecksum)
       throws IOException {
-    try (TraceScope ignored = tracer.newScope(
-        "BlockReaderLocal#fillBuffer(" + block.getBlockId() + ")")) {
+    try (Scope ignored = tracer.buildSpan(
+        "BlockReaderLocal#fillBuffer(" + block.getBlockId() + ")").startActive(true)) {
       int total = 0;
       long startDataPos = dataPos;
       int startBufPos = buf.position();

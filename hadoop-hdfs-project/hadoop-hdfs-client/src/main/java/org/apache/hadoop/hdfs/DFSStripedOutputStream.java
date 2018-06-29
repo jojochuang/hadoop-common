@@ -19,6 +19,7 @@ package org.apache.hadoop.hdfs;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import io.opentracing.Scope;
 import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.fs.CreateFlag;
@@ -1201,8 +1202,8 @@ public class DFSStripedOutputStream extends DFSOutputStream
         closeThreads(true);
       }
 
-      try (TraceScope ignored =
-               dfsClient.getTracer().newScope("completeFile")) {
+      try (Scope ignored =
+               dfsClient.getTracer().buildSpan("completeFile").startActive(true)) {
         completeFile(currentBlockGroup);
       }
       logCorruptBlocks();

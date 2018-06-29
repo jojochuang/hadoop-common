@@ -778,9 +778,11 @@ public class Client implements AutoCloseable {
         if (LOG.isDebugEnabled()) {
           LOG.debug("Connecting to "+server);
         }
-        Span span = Tracer.getCurrentSpan();
+        //Span span = Tracer.getCurrentSpan();
+        io.opentracing.Span span = io.opentracing.util.GlobalTracer.get().activeSpan();
         if (span != null) {
-          span.addTimelineAnnotation("IPC client connecting to " + server);
+          //span.addTimelineAnnotation("IPC client connecting to " + server);
+          span.log("IPC client connecting to " + server);
         }
         short numRetries = 0;
         Random rand = null;
@@ -843,9 +845,11 @@ public class Client implements AutoCloseable {
           // update last activity time
           touch();
 
-          span = Tracer.getCurrentSpan();
+          //span = Tracer.getCurrentSpan();
+          span = io.opentracing.util.GlobalTracer.get().activeSpan();
           if (span != null) {
-            span.addTimelineAnnotation("IPC client connected to " + server);
+            //span.addTimelineAnnotation("IPC client connected to " + server);
+            span.log("IPC client connected to " + server);
           }
 
           // start the receiver thread after the socket connection has been set

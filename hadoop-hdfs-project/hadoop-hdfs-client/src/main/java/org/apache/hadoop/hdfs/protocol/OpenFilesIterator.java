@@ -21,11 +21,11 @@ package org.apache.hadoop.hdfs.protocol;
 import java.io.IOException;
 import java.util.EnumSet;
 
+import io.opentracing.Scope;
+import io.opentracing.Tracer;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.BatchedRemoteIterator;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
 
 /**
  * OpenFilesIterator is a remote iterator that iterates over the open files list
@@ -79,7 +79,7 @@ public class OpenFilesIterator extends
   @Override
   public BatchedEntries<OpenFileEntry> makeRequest(Long prevId)
       throws IOException {
-    try (TraceScope ignored = tracer.newScope("listOpenFiles")) {
+    try (Scope ignored = tracer.buildSpan("listOpenFiles").startActive(true)) {
       return namenode.listOpenFiles(prevId, types);
     }
   }

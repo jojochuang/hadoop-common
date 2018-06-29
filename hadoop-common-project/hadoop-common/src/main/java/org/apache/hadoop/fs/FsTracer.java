@@ -35,14 +35,24 @@ import org.apache.htrace.core.Tracer;
 @InterfaceAudience.Private
 @InterfaceStability.Unstable
 public final class FsTracer {
-  private static Tracer instance;
+  private static io.opentracing.Tracer instance;
 
-  public static synchronized Tracer get(Configuration conf) {
+  public static synchronized io.opentracing.Tracer get(Configuration conf) {
     if (instance == null) {
-      instance = new Tracer.Builder("FSClient").
-          conf(TraceUtils.wrapHadoopConf(CommonConfigurationKeys.
-              FS_CLIENT_HTRACE_PREFIX, conf)).
-          build();
+//      instance = new Tracer.Builder("FSClient").
+//          conf(TraceUtils.wrapHadoopConf(CommonConfigurationKeys.
+//              FS_CLIENT_HTRACE_PREFIX, conf)).
+//          build();
+
+      io.opentracing.Tracer tempInstance =
+          new com.uber.jaeger.Configuration(
+              "FSClient",
+              new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
+              new com.uber.jaeger.Configuration.ReporterConfiguration(
+                  false, "va1022.halxg.cloudera.com", 6831, 1000, 10000)
+          ).getTracer();
+      instance = tempInstance;
+      return instance;
     }
     return instance;
   }
@@ -53,7 +63,7 @@ public final class FsTracer {
       return;
     }
     try {
-      instance.close();
+//      instance.close();
     } finally {
       instance = null;
     }

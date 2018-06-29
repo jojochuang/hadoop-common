@@ -20,11 +20,11 @@ package org.apache.hadoop.hdfs.protocol;
 
 import java.io.IOException;
 
+import io.opentracing.Scope;
+import io.opentracing.Tracer;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.BatchedRemoteIterator;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
 
 /**
  * EncryptionZoneIterator is a remote iterator that iterates over encryption
@@ -47,7 +47,7 @@ public class EncryptionZoneIterator
   @Override
   public BatchedEntries<EncryptionZone> makeRequest(Long prevId)
       throws IOException {
-    try (TraceScope ignored = tracer.newScope("listEncryptionZones")) {
+    try (Scope ignored = tracer.buildSpan("listEncryptionZones").startActive(true)) {
       return namenode.listEncryptionZones(prevId);
     }
   }

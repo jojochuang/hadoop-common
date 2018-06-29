@@ -190,9 +190,9 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
   private Configuration configuration;
 
   /**
-   * The HTrace tracer to use.
+   * The OpenTracing tracer to use.
    */
-  private Tracer tracer;
+  private io.opentracing.Tracer tracer;
 
   /**
    * Information about the domain socket path we should use to connect to the
@@ -298,7 +298,7 @@ public class BlockReaderFactory implements ShortCircuitReplicaCreator {
     return this;
   }
 
-  public BlockReaderFactory setTracer(Tracer tracer) {
+  public BlockReaderFactory setTracer(io.opentracing.Tracer tracer) {
     this.tracer = tracer;
     return this;
   }
