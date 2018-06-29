@@ -2689,10 +2689,7 @@ public abstract class Server {
             traceScope = call.traceScope;
             io.opentracing.Span span =  traceScope.span();
             span.log("called");
-            callScope = tracer.scopeManager().activate(span, false);
-            //traceScope.getSpan().addTimelineAnnotation("called");
-            //io.opentracing.Tracer tracer;
-            //tracer.inject();
+            callScope = tracer.scopeManager().activate(span, true);
           }
           // always update the current call context
           CallerContext.setCurrent(call.callerContext);

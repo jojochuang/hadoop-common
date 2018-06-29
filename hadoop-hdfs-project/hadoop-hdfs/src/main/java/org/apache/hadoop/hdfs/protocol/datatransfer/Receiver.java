@@ -88,12 +88,6 @@ public abstract class Receiver implements DataTransferProtocol {
 
   private Scope continueTraceSpan(DataTransferTraceInfoProto proto,
                                        String description) {
-    Scope scope = null;
-    // FIXME: wait until proto done
-//    SpanId spanId = fromProto(proto);
-//    if (spanId != null) {
-//      scope = tracer.newScope(description, spanId);
-//    }
     String traceId = fromProto(proto);
     Map<String, String> map = new HashMap<String, String>();
     map.put("uber-trace-id", traceId);
@@ -101,7 +95,7 @@ public abstract class Receiver implements DataTransferProtocol {
     SpanContext parentContext =
         tracer.extract(Format.Builtin.TEXT_MAP, textMap);
     //LOG.info("parentContext: " + parentContext);
-    scope = tracer.buildSpan("DataNode Receiver:" + description).asChildOf(parentContext).startActive(false);
+    Scope scope = tracer.buildSpan("DataNode Receiver:" + description).asChildOf(parentContext).startActive(true);
 
     return scope;
   }
