@@ -2474,7 +2474,7 @@ public abstract class Server {
 
         if (otracer != null) {
           Map<String, String> map = new HashMap<String, String>();
-          map.put("uber-trace-id", String.valueOf(header.getTraceInfo().getTraceId()));
+          map.put("uber-trace-id", header.getTraceInfo().getTraceId());
           TextMap textMap = new TextMapExtractAdapter(map);
           SpanContext parentContext =
               otracer.extract(Format.Builtin.TEXT_MAP, textMap);
