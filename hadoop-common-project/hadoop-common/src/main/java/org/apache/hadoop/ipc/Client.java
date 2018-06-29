@@ -28,6 +28,7 @@ import org.apache.hadoop.classification.InterfaceStability.Unstable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
+import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
@@ -53,8 +54,6 @@ import org.apache.hadoop.util.ProtoUtil;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Time;
 import org.apache.hadoop.util.concurrent.AsyncGet;
-import org.apache.htrace.core.Span;
-import org.apache.htrace.core.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -779,7 +778,7 @@ public class Client implements AutoCloseable {
           LOG.debug("Connecting to "+server);
         }
         //Span span = Tracer.getCurrentSpan();
-        io.opentracing.Span span = io.opentracing.util.GlobalTracer.get().activeSpan();
+        io.opentracing.Span span = FsTracer.get(conf).activeSpan();
         if (span != null) {
           //span.addTimelineAnnotation("IPC client connecting to " + server);
           span.log("IPC client connecting to " + server);
@@ -846,7 +845,7 @@ public class Client implements AutoCloseable {
           touch();
 
           //span = Tracer.getCurrentSpan();
-          span = io.opentracing.util.GlobalTracer.get().activeSpan();
+          span = FsTracer.get(conf).activeSpan();
           if (span != null) {
             //span.addTimelineAnnotation("IPC client connected to " + server);
             span.log("IPC client connected to " + server);

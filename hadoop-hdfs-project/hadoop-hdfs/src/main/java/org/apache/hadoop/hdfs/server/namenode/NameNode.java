@@ -31,6 +31,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.ReconfigurableBase;
 import org.apache.hadoop.conf.ReconfigurationException;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.fs.Trash;
 import org.apache.hadoop.ha.HAServiceProtocol.HAServiceState;
 import org.apache.hadoop.ha.HAServiceProtocol.StateChangeRequestInfo;
@@ -386,6 +387,7 @@ public class NameNode extends ReconfigurableBase implements
   private JvmPauseMonitor pauseMonitor;
   private ObjectName nameNodeStatusBeanName;
   protected final Tracer tracer;
+  protected final io.opentracing.Tracer otracer;
   protected final TracerConfigurationManager tracerConfigurationManager;
   ScheduledThreadPoolExecutor metricsLoggerTimer;
 
@@ -935,6 +937,16 @@ public class NameNode extends ReconfigurableBase implements
     this.tracer = new Tracer.Builder("NameNode").
         conf(TraceUtils.wrapHadoopConf(NAMENODE_HTRACE_PREFIX, conf)).
         build();
+
+    this.otracer =
+        FsTracer.get(null);
+        /*new com.uber.jaeger.Configuration(
+            "FSClient",
+            new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
+            new com.uber.jaeger.Configuration.ReporterConfiguration(
+                false, "va1022.halxg.cloudera.com", 6831, 1000, 10000)
+        ).getTracer();*/
+
     this.tracerConfigurationManager =
         new TracerConfigurationManager(NAMENODE_HTRACE_PREFIX, conf);
     this.role = role;

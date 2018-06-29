@@ -70,6 +70,11 @@ import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
 
+import io.opentracing.SpanContext;
+import io.opentracing.propagation.Format;
+import io.opentracing.propagation.TextMap;
+import io.opentracing.propagation.TextMapExtractAdapter;
+import io.opentracing.propagation.TextMapInjectAdapter;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceAudience.Private;
 import org.apache.hadoop.classification.InterfaceAudience.Public;
@@ -140,6 +145,7 @@ public abstract class Server {
   private RpcSaslProto negotiateResponse;
   private ExceptionsHandler exceptionsHandler = new ExceptionsHandler();
   private Tracer tracer;
+  private io.opentracing.Tracer otracer;
   
   /**
    * Add exception classes for which server won't log stack traces.
@@ -682,7 +688,7 @@ public abstract class Server {
     private AtomicInteger responseWaitCount = new AtomicInteger(1);
     final RPC.RpcKind rpcKind;
     final byte[] clientId;
-    private final TraceScope traceScope; // the HTrace scope on the server side
+    private final io.opentracing.Scope traceScope; // the HTrace scope on the server side
     private final CallerContext callerContext; // the call context
     private boolean deferredResponse = false;
     private int priorityLevel;
@@ -709,7 +715,7 @@ public abstract class Server {
     }
 
     Call(int id, int retryCount, RPC.RpcKind kind, byte[] clientId,
-        TraceScope traceScope, CallerContext callerContext) {
+        io.opentracing.Scope traceScope, CallerContext callerContext) {
       this.callId = id;
       this.retryCount = retryCount;
       this.timestamp = Time.now();
@@ -835,7 +841,7 @@ public abstract class Server {
 
     RpcCall(Connection connection, int id, int retryCount,
         Writable param, RPC.RpcKind kind, byte[] clientId,
-        TraceScope traceScope, CallerContext context) {
+        io.opentracing.Scope traceScope, CallerContext context) {
       super(id, retryCount, kind, clientId, traceScope, context);
       this.connection = connection;
       this.rpcRequest = param;
@@ -2447,18 +2453,28 @@ public abstract class Server {
             RpcErrorCodeProto.FATAL_DESERIALIZING_REQUEST, err);
       }
         
-      TraceScope traceScope = null;
+      //TraceScope traceScope = null;
+      io.opentracing.Scope scope = null;
       if (header.hasTraceInfo()) {
         if (tracer != null) {
           // If the incoming RPC included tracing info, always continue the
           // trace
-          SpanId parentSpanId = new SpanId(
+          /*SpanId parentSpanId = new SpanId(
               header.getTraceInfo().getTraceId(),
               header.getTraceInfo().getParentId());
           traceScope = tracer.newScope(
               RpcClientUtil.toTraceName(rpcRequest.toString()),
               parentSpanId);
-          traceScope.detach();
+          traceScope.detach();*/
+        }
+
+        if (otracer != null) {
+          Map<String, String> map = new HashMap<String, String>();
+          map.put("uber-trace-id", header.getTraceInfo().getTraceId());
+          TextMap textMap = new TextMapExtractAdapter(map);
+          SpanContext parentContext =
+              otracer.extract(Format.Builtin.TEXT_MAP, textMap);
+          scope = otracer.buildSpan("NAMENODE:" + rpcRequest.toString()).asChildOf(parentContext).startActive(false);
         }
       }
 
@@ -2474,7 +2490,7 @@ public abstract class Server {
       RpcCall call = new RpcCall(this, header.getCallId(),
           header.getRetryCount(), rpcRequest,
           ProtoUtil.convert(header.getRpcKind()),
-          header.getClientId().toByteArray(), traceScope, callerContext);
+          header.getClientId().toByteArray(), scope, callerContext);
 
       // Save the priority level assignment by the scheduler
       call.setPriorityLevel(callQueue.getPriorityLevel(call));
@@ -2656,17 +2672,24 @@ public abstract class Server {
       LOG.debug(Thread.currentThread().getName() + ": starting");
       SERVER.set(Server.this);
       while (running) {
-        TraceScope traceScope = null;
+        io.opentracing.Scope traceScope = null;
+        io.opentracing.Scope callScope = null;
         try {
           final Call call = callQueue.take(); // pop the queue; maybe blocked here
           if (LOG.isDebugEnabled()) {
             LOG.debug(Thread.currentThread().getName() + ": " + call + " for RpcKind " + call.rpcKind);
           }
           CurCall.set(call);
+
           if (call.traceScope != null) {
-            call.traceScope.reattach();
+            //call.traceScope.reattach();
             traceScope = call.traceScope;
-            traceScope.getSpan().addTimelineAnnotation("called");
+            io.opentracing.Span span =  traceScope.span();
+            span.log("called");
+            callScope = otracer.scopeManager().activate(span, false);
+            //traceScope.getSpan().addTimelineAnnotation("called");
+            //io.opentracing.Tracer tracer;
+            //tracer.inject();
           }
           // always update the current call context
           CallerContext.setCurrent(call.callerContext);
@@ -2679,20 +2702,24 @@ public abstract class Server {
         } catch (InterruptedException e) {
           if (running) {                          // unexpected -- log it
             LOG.info(Thread.currentThread().getName() + " unexpectedly interrupted", e);
-            if (traceScope != null) {
-              traceScope.getSpan().addTimelineAnnotation("unexpectedly interrupted: " +
+            if (callScope != null) {
+              callScope.span().log("unexpectedly interrupted: " +
                   StringUtils.stringifyException(e));
             }
           }
         } catch (Exception e) {
           LOG.info(Thread.currentThread().getName() + " caught an exception", e);
-          if (traceScope != null) {
-            traceScope.getSpan().addTimelineAnnotation("Exception: " +
+          if (callScope != null) {
+            callScope.span().log("Exception: " +
                 StringUtils.stringifyException(e));
           }
         } finally {
           CurCall.set(null);
           IOUtils.cleanupWithLogger(LOG, traceScope);
+
+          if (callScope != null) {
+            callScope.close();
+          }
         }
       }
       LOG.debug(Thread.currentThread().getName() + ": exiting");
@@ -3055,6 +3082,10 @@ public abstract class Server {
 
   public void setTracer(Tracer t) {
     this.tracer = t;
+  }
+
+  public void setOTracer(io.opentracing.Tracer t) {
+    this.otracer = t;
   }
 
   /** Starts the service.  Must be called before any calls will be handled. */
