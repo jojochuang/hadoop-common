@@ -34,6 +34,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.qjournal.client.QuorumJournalManager;
@@ -76,6 +77,7 @@ public class JournalNode implements Tool, Configurable, JournalNodeMXBean {
   private String httpServerURI;
   private File localDir;
   Tracer tracer;
+  io.opentracing.Tracer otracer;
 
   static {
     HdfsConfiguration.init();
@@ -155,6 +157,10 @@ public class JournalNode implements Tool, Configurable, JournalNodeMXBean {
       this.tracer = new Tracer.Builder("JournalNode").
           conf(TraceUtils.wrapHadoopConf("journalnode.htrace", conf)).
           build();
+    }
+
+    if (this.otracer == null) {
+      this.otracer = FsTracer.get(null);
     }
   }
 

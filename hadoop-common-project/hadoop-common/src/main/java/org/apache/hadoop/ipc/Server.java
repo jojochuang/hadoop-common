@@ -2474,7 +2474,7 @@ public abstract class Server {
           TextMap textMap = new TextMapExtractAdapter(map);
           SpanContext parentContext =
               otracer.extract(Format.Builtin.TEXT_MAP, textMap);
-          scope = otracer.buildSpan("NAMENODE:" + rpcRequest.toString()).asChildOf(parentContext).startActive(false);
+          scope = otracer.buildSpan("Server:" + rpcRequest.toString()).asChildOf(parentContext).startActive(false);
         }
       }
 

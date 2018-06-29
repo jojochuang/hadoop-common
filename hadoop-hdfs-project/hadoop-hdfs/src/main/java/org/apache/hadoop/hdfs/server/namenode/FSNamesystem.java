@@ -89,6 +89,8 @@ import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_REPLICATION_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_REPLICATION_KEY;
 import static org.apache.hadoop.hdfs.server.namenode.FSDirStatAndListingOp.*;
 
+import io.opentracing.Scope;
+import io.opentracing.Tracer;
 import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicyInfo;
 import org.apache.hadoop.hdfs.protocol.OpenFilesIterator.OpenFilesType;
@@ -589,6 +591,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   private static final boolean CLOUDERA_ERASURE_CODING_ENABLED_DEFAULT = false;
   private final boolean clouderaErasureCodingEnabled;
 
+  private Tracer tracer;
+
   /**
    * CLOUDERA-BUILD. CDH-64271.
    *
@@ -723,7 +727,6 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * @throws IOException if loading fails
    */
   static FSNamesystem loadFromDisk(Configuration conf) throws IOException {
-
     checkConfiguration(conf);
     FSImage fsImage = new FSImage(conf,
         FSNamesystem.getNamespaceDirs(conf),
@@ -930,6 +933,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
           DFSConfigKeys.DFS_NAMENODE_LIST_OPENFILES_NUM_RESPONSES +
               " must be a positive integer."
       );
+      tracer = FsTracer.get(null);
     } catch(IOException e) {
       LOG.error(getClass().getSimpleName() + " initialization failed.", e);
       close();
@@ -1877,7 +1881,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     FileStatus auditStat;
     checkOperation(OperationCategory.WRITE);
     writeLock();
-    try {
+    try (Scope scope = tracer.buildSpan("FSEditLog#setPermission").startActive(true)) {
+      scope.span().setTag("src", src);
       checkOperation(OperationCategory.WRITE);
       checkNameNodeSafeMode("Cannot set permission for " + src);
       auditStat = FSDirAttrOp.setPermission(dir, src, permission);
@@ -2401,7 +2406,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
     checkOperation(OperationCategory.WRITE);
     writeLock();
-    try {
+    try (Scope scope = tracer.buildSpan("FSNameSystem#startFileInt").startActive(true)) {
+      scope.span().setTag("src", src);
       checkOperation(OperationCategory.WRITE);
       checkNameNodeSafeMode("Cannot create file" + src);
 
@@ -2842,7 +2848,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     checkOperation(OperationCategory.WRITE);
     FSPermissionChecker pc = getPermissionChecker();
     writeLock();
-    try (io.opentracing.Scope ignored = FsTracer.get(null).buildSpan("FSNamesystem#completeFile").startActive(true)) {
+    try (Scope scope = tracer.buildSpan("FSNamesystem#completeFile").startActive(true)) {
+      scope.span().setTag("src", src);
       checkOperation(OperationCategory.WRITE);
       checkNameNodeSafeMode("Cannot complete file " + src);
       success = FSDirWriteFileOp.completeFile(this, pc, src, holder, last,
@@ -3019,7 +3026,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     Iterator<BlockInfo> iter = toDeleteList.iterator();
     while (iter.hasNext()) {
       writeLock();
-      try {
+      try (io.opentracing.Scope scope = tracer.buildSpan("FSNamesystem#removeBlocks").startActive(true)){
         for (int i = 0; i < BLOCK_DELETION_INCREMENT && iter.hasNext(); i++) {
           blockManager.removeBlock(iter.next());
         }
@@ -3079,7 +3086,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     checkOperation(OperationCategory.READ);
     HdfsFileStatus stat = null;
     readLock();
-    try {
+    try (Scope scope = tracer.buildSpan("FSNamesystem#getFileInfo").startActive(true)) {
+      scope.span().setTag("src", src);
       checkOperation(OperationCategory.READ);
       stat = FSDirStatAndListingOp.getFileInfo(dir, src, resolveLink);
     } catch (AccessControlException e) {
@@ -4310,7 +4318,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     checkSuperuserPrivilege();
     checkOperation(OperationCategory.UNCHECKED);
     readLock();
-    try (io.opentracing.Scope ignored = FsTracer.get(null).buildSpan("FSNamesystem#datanodeReport").startActive(true)) {
+    try (Scope scope = tracer.buildSpan("FSNamesystem#datanodeReport").startActive(true)) {
       checkOperation(OperationCategory.UNCHECKED);
       final DatanodeManager dm = getBlockManager().getDatanodeManager();      
       final List<DatanodeDescriptor> results = dm.getDatanodeListForReport(type);

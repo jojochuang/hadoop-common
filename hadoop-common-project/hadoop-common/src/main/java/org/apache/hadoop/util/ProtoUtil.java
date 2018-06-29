@@ -197,6 +197,10 @@ public abstract class ProtoUtil {
         .setParentId(0)
         .build());
 
+    for (Map.Entry<String, String> entry : map.entrySet()) {
+      System.out.println("SpanContext " + entry.getKey() + ":" + entry.getValue());
+    }
+
     // Add caller context if it is not null
     CallerContext callerContext = CallerContext.getCurrent();
     if (callerContext != null && callerContext.isContextValid()) {
