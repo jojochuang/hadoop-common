@@ -20,7 +20,10 @@ package org.apache.hadoop.hdfs.server.datanode;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.protobuf.ByteString;
+import io.opentracing.Scope;
+import io.opentracing.Tracer;
 import org.apache.commons.logging.Log;
+import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.DFSUtilClient;
 import org.apache.hadoop.hdfs.ExtendedBlockId;
@@ -783,7 +786,9 @@ class DataXceiver extends Receiver implements Runnable {
         }
         mirrorTarget = NetUtils.createSocketAddr(mirrorNode);
         mirrorSock = datanode.newSocket();
-        try {
+        Tracer tracer = datanode.getTracer();
+        try (Scope scope = tracer.buildSpan("writeBlock").startActive(true)){
+          scope.span().setTag("mirrorNode", mirrorNode);
 
           DataNodeFaultInjector.get().failMirrorConnection();
 

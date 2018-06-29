@@ -18,9 +18,16 @@
 package org.apache.hadoop.hdfs.protocol.datatransfer;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
+import io.opentracing.SpanContext;
+import io.opentracing.propagation.Format;
+import io.opentracing.propagation.TextMap;
+import io.opentracing.propagation.TextMapInjectAdapter;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
+import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.BaseHeaderProto;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.BlockOpResponseProto;
@@ -87,19 +94,27 @@ public abstract class DataTransferProtoUtil {
     BaseHeaderProto.Builder builder =  BaseHeaderProto.newBuilder()
         .setBlock(PBHelperClient.convert(blk))
         .setToken(PBHelperClient.convert(blockToken));
-    SpanId spanId = Tracer.getCurrentSpanId();
-    if (spanId.isValid()) {
+
+    io.opentracing.Tracer tracer = FsTracer.get(null);
+
+    if (tracer.activeSpan() != null) {
+      SpanContext spanContext = tracer.activeSpan().context();
+      Map<String, String> map = new HashMap<String, String>();
+      TextMap textMap = new TextMapInjectAdapter(map);
+      tracer.inject(spanContext, Format.Builtin.TEXT_MAP, textMap);
+
       builder.setTraceInfo(DataTransferTraceInfoProto.newBuilder()
-          .setTraceId(spanId.getHigh())
-          .setParentId(spanId.getLow()));
+          .setTraceId(map.get("uber-trace-id")).setParentId(0));
+
     }
     return builder.build();
   }
 
-  public static SpanId fromProto(DataTransferTraceInfoProto proto) {
+  public static String fromProto(DataTransferTraceInfoProto proto) {
     if ((proto != null) && proto.hasTraceId() &&
           proto.hasParentId()) {
-      return new SpanId(proto.getTraceId(), proto.getParentId());
+      //return new SpanId(proto.getTraceId(), proto.getParentId());
+      return proto.getTraceId();
     }
     return null;
   }

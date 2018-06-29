@@ -22,7 +22,13 @@ import static org.apache.hadoop.hdfs.protocolPB.PBHelperClient.vintPrefixed;
 
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
+import io.opentracing.SpanContext;
+import io.opentracing.propagation.Format;
+import io.opentracing.propagation.TextMap;
+import io.opentracing.propagation.TextMapExtractAdapter;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.StorageType;
@@ -49,7 +55,7 @@ import org.apache.hadoop.hdfs.shortcircuit.ShortCircuitShm.SlotId;
 
 import io.opentracing.Scope;
 import io.opentracing.Tracer;
-import org.apache.htrace.core.SpanId;
+//import org.apache.htrace.core.SpanId;
 //import org.apache.htrace.core.TraceScope;
 //import org.apache.htrace.core.Tracer;
 
@@ -88,7 +94,15 @@ public abstract class Receiver implements DataTransferProtocol {
 //    if (spanId != null) {
 //      scope = tracer.newScope(description, spanId);
 //    }
-    scope = tracer.buildSpan(description).startActive(true);
+    String traceId = fromProto(proto);
+    Map<String, String> map = new HashMap<String, String>();
+    map.put("uber-trace-id", traceId);
+    TextMap textMap = new TextMapExtractAdapter(map);
+    SpanContext parentContext =
+        tracer.extract(Format.Builtin.TEXT_MAP, textMap);
+    //LOG.info("parentContext: " + parentContext);
+    scope = tracer.buildSpan("DataNode Receiver:" + description).asChildOf(parentContext).startActive(false);
+
     return scope;
   }
 

@@ -147,7 +147,6 @@ public abstract class Server {
   private RpcSaslProto negotiateResponse;
   private ExceptionsHandler exceptionsHandler = new ExceptionsHandler();
   private Tracer tracer;
-  private io.opentracing.Tracer otracer;
   
   /**
    * Add exception classes for which server won't log stack traces.
@@ -2472,13 +2471,13 @@ public abstract class Server {
           traceScope.detach();*/
         }
 
-        if (otracer != null) {
+        if (tracer != null) {
           Map<String, String> map = new HashMap<String, String>();
           map.put("uber-trace-id", header.getTraceInfo().getTraceId());
           TextMap textMap = new TextMapExtractAdapter(map);
           SpanContext parentContext =
-              otracer.extract(Format.Builtin.TEXT_MAP, textMap);
-          scope = otracer.buildSpan("Server:" + rpcRequest.toString()).asChildOf(parentContext).startActive(false);
+              tracer.extract(Format.Builtin.TEXT_MAP, textMap);
+          scope = tracer.buildSpan("Server:" + rpcRequest.toString()).asChildOf(parentContext).startActive(false);
         }
       }
 
@@ -2690,7 +2689,7 @@ public abstract class Server {
             traceScope = call.traceScope;
             io.opentracing.Span span =  traceScope.span();
             span.log("called");
-            callScope = otracer.scopeManager().activate(span, false);
+            callScope = tracer.scopeManager().activate(span, false);
             //traceScope.getSpan().addTimelineAnnotation("called");
             //io.opentracing.Tracer tracer;
             //tracer.inject();
@@ -3088,10 +3087,6 @@ public abstract class Server {
 
   public void setTracer(Tracer t) {
     this.tracer = t;
-  }
-
-  public void setOTracer(io.opentracing.Tracer t) {
-    this.otracer = t;
   }
 
   /** Starts the service.  Must be called before any calls will be handled. */

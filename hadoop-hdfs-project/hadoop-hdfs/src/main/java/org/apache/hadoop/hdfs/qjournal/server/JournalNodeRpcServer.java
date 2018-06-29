@@ -90,7 +90,6 @@ public class JournalNodeRpcServer implements QJournalProtocol {
           server.refreshServiceAcl(confCopy, new HDFSPolicyProvider());
     }
     this.server.setTracer(jn.tracer);
-    this.server.setOTracer(jn.otracer);
   }
 
   void start() {

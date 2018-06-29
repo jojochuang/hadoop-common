@@ -79,7 +79,6 @@ public class JournalNode implements Tool, Configurable, JournalNodeMXBean {
   private String httpServerURI;
   private File localDir;
   Tracer tracer;
-  io.opentracing.Tracer otracer;
 
   static {
     HdfsConfiguration.init();
@@ -173,9 +172,6 @@ public class JournalNode implements Tool, Configurable, JournalNodeMXBean {
       this.tracer = GlobalTracer.get();
     }
 
-    if (this.otracer == null) {
-      this.otracer = FsTracer.get(null);
-    }
   }
 
   private static void validateAndCreateJournalDir(File dir) throws IOException {

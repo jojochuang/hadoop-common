@@ -35,7 +35,7 @@ import org.apache.htrace.core.Tracer;
 @InterfaceAudience.Private
 @InterfaceStability.Unstable
 public final class FsTracer {
-  private static io.opentracing.Tracer instance;
+  private static io.opentracing.Tracer instance = null;
 
   public static synchronized io.opentracing.Tracer get(Configuration conf) {
     if (instance == null) {

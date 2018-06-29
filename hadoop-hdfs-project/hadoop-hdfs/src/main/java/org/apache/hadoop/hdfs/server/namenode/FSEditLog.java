@@ -643,9 +643,9 @@ public class FSEditLog implements LogsPurgeable {
    */
   public void logSync() {
     // Fetch the transactionId of this thread.
-    try (io.opentracing.Scope ignored = FsTracer.get(null).buildSpan("FSEditLog#logSync").startActive(true)) {
+    //try (io.opentracing.Scope ignored = FsTracer.get(null).buildSpan("FSEditLog#logSync").startActive(true)) {
       logSync(myTransactionId.get().txid);
-    }
+    //}
   }
 
   protected void logSync(long mytxid) {

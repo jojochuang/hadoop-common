@@ -214,7 +214,7 @@ public class ProtobufRpcEngine implements RpcEngine {
         traceScope = tracer.newScope(RpcClientUtil.methodToTraceString(method));
       }*/
       io.opentracing.Tracer tracer = FsTracer.get(null);
-      io.opentracing.Scope scope = tracer.buildSpan(RpcClientUtil.methodToTraceString(method)).startActive(true);
+      io.opentracing.Scope scope = tracer.buildSpan(RpcClientUtil.methodToTraceString(method)).startActive(false);
 
       RequestHeaderProto rpcRequestHeader = constructRpcRequestHeader(method);
       

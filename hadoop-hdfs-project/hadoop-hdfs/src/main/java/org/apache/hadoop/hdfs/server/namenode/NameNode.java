@@ -388,8 +388,7 @@ public class NameNode extends ReconfigurableBase implements
 
   private JvmPauseMonitor pauseMonitor;
   private ObjectName nameNodeStatusBeanName;
-  protected final Tracer tracer;
-  protected final io.opentracing.Tracer otracer;
+  public static Tracer tracer = null;
   protected final TracerConfigurationManager tracerConfigurationManager;
   ScheduledThreadPoolExecutor metricsLoggerTimer;
 
@@ -933,29 +932,34 @@ public class NameNode extends ReconfigurableBase implements
     this(conf, NamenodeRole.NAMENODE);
   }
 
+  public static Tracer initTracer(Configuration conf) {
+    if (tracer == null) {
+      com.uber.jaeger.Configuration jaegerConf = new com.uber.jaeger.Configuration("NameNode",
+          new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
+          new com.uber.jaeger.Configuration.ReporterConfiguration(false,
+              "va1022.halxg.cloudera.com", 6831, 1000, 10000));
+      tracer = jaegerConf.getTracer();
+      //GlobalTracer.register(tracer);
+    }
+    return tracer;
+  }
+
   protected NameNode(Configuration conf, NamenodeRole role)
       throws IOException {
     super(conf);
+    initTracer(conf);
 //    this.tracer = new Tracer.Builder("NameNode").
 //        conf(TraceUtils.wrapHadoopConf(NAMENODE_HTRACE_PREFIX, conf)).
 //        build();
 
 
-    if (!GlobalTracer.isRegistered()) {
-      com.uber.jaeger.Configuration jaegerConf =
-          new com.uber.jaeger.Configuration(
-              "NameNode",
-              new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
-              new com.uber.jaeger.Configuration.ReporterConfiguration(
-                  false, "va1022.halxg.cloudera.com", 6831, 1000, 10000)
-          );
-      io.opentracing.Tracer tracer = jaegerConf.getTracer();
-      GlobalTracer.register(tracer);
-    }
-    this.tracer = GlobalTracer.get();
+    /*if (!GlobalTracer.isRegistered()) {
 
-    this.otracer =
-        FsTracer.get(null);
+    }
+    this.tracer = GlobalTracer.get();*/
+
+    //this.otracer = this.tracer;
+        //FsTracer.get(null);
         /*new com.uber.jaeger.Configuration(
             "FSClient",
             new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),

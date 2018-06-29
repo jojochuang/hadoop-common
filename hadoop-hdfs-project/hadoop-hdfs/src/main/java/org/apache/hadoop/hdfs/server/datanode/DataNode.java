@@ -51,6 +51,7 @@ import static org.apache.hadoop.util.ExitUtil.terminate;
 import io.opentracing.Tracer;
 import io.opentracing.util.GlobalTracer;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
+import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.hdfs.protocol.proto.ReconfigurationProtocolProtos.ReconfigurationProtocolService;
 
 import java.io.BufferedOutputStream;
@@ -385,7 +386,7 @@ public class DataNode extends ReconfigurableBase
   private String dnUserName = null;
   private BlockRecoveryWorker blockRecoveryWorker;
   private ErasureCodingWorker ecWorker;
-  private final Tracer tracer;
+  private static Tracer tracer = null;
   private final TracerConfigurationManager tracerConfigurationManager;
   private static final int NUM_CORES = Runtime.getRuntime()
       .availableProcessors();
@@ -399,23 +400,24 @@ public class DataNode extends ReconfigurableBase
 
   private final SocketFactory socketFactory;
 
-  private static Tracer createTracer(Configuration conf) {
-    if (!GlobalTracer.isRegistered()) {
-      com.uber.jaeger.Configuration jaegerConf =
+  public static Tracer createTracer(Configuration conf) {
+    if (tracer == null) {
+      /*com.uber.jaeger.Configuration jaegerConf =
           new com.uber.jaeger.Configuration(
               "DataNode",
               new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
               new com.uber.jaeger.Configuration.ReporterConfiguration(
                   false, "va1022.halxg.cloudera.com", 6831, 1000, 10000)
           );
-      io.opentracing.Tracer tracer = jaegerConf.getTracer();
-      GlobalTracer.register(tracer);
+      tracer = jaegerConf.getTracer();*/
+      tracer = FsTracer.get(conf);
     }
+    return tracer;
 
 //    return new Tracer.Builder("DataNode").
 //        conf(TraceUtils.wrapHadoopConf(DATANODE_HTRACE_PREFIX , conf)).
 //        build();
-    return GlobalTracer.get();
+    //return GlobalTracer.get();
   }
 
   private long[] oobTimeouts; /** timeout value of each OOB type */
@@ -429,7 +431,7 @@ public class DataNode extends ReconfigurableBase
   @InterfaceAudience.LimitedPrivate("HDFS")
   DataNode(final Configuration conf) throws DiskErrorException {
     super(conf);
-    this.tracer = createTracer(conf);
+    this.tracer = createTracer(conf); //FsTracer.get(conf);
     this.tracerConfigurationManager =
         new TracerConfigurationManager(DATANODE_HTRACE_PREFIX, conf);
     this.fileIoProvider = new FileIoProvider(conf, this);
@@ -456,7 +458,7 @@ public class DataNode extends ReconfigurableBase
            final StorageLocationChecker storageLocationChecker,
            final SecureResources resources) throws IOException {
     super(conf);
-    this.tracer = createTracer(conf);
+    this.tracer = createTracer(conf); //FsTracer.get(conf);
     this.tracerConfigurationManager =
         new TracerConfigurationManager(DATANODE_HTRACE_PREFIX, conf);
     this.fileIoProvider = new FileIoProvider(conf, this);

@@ -933,7 +933,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
           DFSConfigKeys.DFS_NAMENODE_LIST_OPENFILES_NUM_RESPONSES +
               " must be a positive integer."
       );
-      tracer = FsTracer.get(null);
+      tracer = NameNode.initTracer(conf);
     } catch(IOException e) {
       LOG.error(getClass().getSimpleName() + " initialization failed.", e);
       close();
@@ -3026,7 +3026,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     Iterator<BlockInfo> iter = toDeleteList.iterator();
     while (iter.hasNext()) {
       writeLock();
-      try (io.opentracing.Scope scope = tracer.buildSpan("FSNamesystem#removeBlocks").startActive(true)){
+      try (Scope scope = tracer.buildSpan("FSNamesystem#removeBlocks").startActive(true)){
         for (int i = 0; i < BLOCK_DELETION_INCREMENT && iter.hasNext(); i++) {
           blockManager.removeBlock(iter.next());
         }

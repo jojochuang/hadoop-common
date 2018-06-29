@@ -24,6 +24,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.util.Arrays;
 
+import io.opentracing.Scope;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.protocol.datatransfer.PacketHeader;
@@ -41,7 +42,7 @@ import org.apache.htrace.core.TraceScope;
 @InterfaceAudience.Private
 public class DFSPacket {
   public static final long HEART_BEAT_SEQNO = -1L;
-  private static SpanId[] EMPTY = new SpanId[0];
+  private static String[] EMPTY = new String[0];
   private final long seqno; // sequence number of buffer in block
   private final long offsetInBlock; // offset in block
   private boolean syncBlock; // this packet forces the current block to disk
@@ -68,9 +69,9 @@ public class DFSPacket {
   private int checksumPos;
   private final int dataStart;
   private int dataPos;
-  private SpanId[] traceParents = EMPTY;
+  private String[] traceParents = EMPTY;
   private int traceParentsUsed;
-  private TraceScope scope;
+  private Scope scope;
 
   /**
    * Create a new packet.
@@ -302,17 +303,17 @@ public class DFSPacket {
    *
    * Protected by the DFSOutputStream dataQueue lock.
    */
-  public void addTraceParent(Span span) {
+  /*public void addTraceParent(Span span) {
     if (span == null) {
       return;
     }
     addTraceParent(span.getSpanId());
-  }
+  }*/
 
-  public void addTraceParent(SpanId id) {
-    if (!id.isValid()) {
+  public void addTraceParent(String id) {
+    /*if (!id.isValid()) {
       return;
-    }
+    }*/
     if (traceParentsUsed == traceParents.length) {
       int newLength = (traceParents.length == 0) ? 8 :
           traceParents.length * 2;
@@ -329,9 +330,9 @@ public class DFSPacket {
    *
    * Protected by the DFSOutputStream dataQueue lock.
    */
-  public SpanId[] getTraceParents() {
+  public String[] getTraceParents() {
     // Remove duplicates from the array.
-    int len = traceParentsUsed;
+    /*int len = traceParentsUsed;
     Arrays.sort(traceParents, 0, len);
     int i = 0, j = 0;
     SpanId prevVal = SpanId.INVALID;
@@ -350,15 +351,15 @@ public class DFSPacket {
     if (j < traceParents.length) {
       traceParents = Arrays.copyOf(traceParents, j);
       traceParentsUsed = traceParents.length;
-    }
+    }*/
     return traceParents;
   }
 
-  public void setTraceScope(TraceScope scope) {
+  public void setTraceScope(Scope scope) {
     this.scope = scope;
   }
 
-  public TraceScope getTraceScope() {
+  public Scope getTraceScope() {
     return scope;
   }
 }

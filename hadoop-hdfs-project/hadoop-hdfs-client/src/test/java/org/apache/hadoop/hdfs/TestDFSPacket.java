@@ -67,7 +67,7 @@ public class TestDFSPacket {
     }
   }
 
-  @Test
+  /*@Test
   public void testAddParentsGetParents() throws Exception {
     DFSPacket p = new DFSPacket(null, maxChunksPerPacket,
                                 0, 0, checksumSize, false);
@@ -90,5 +90,5 @@ public class TestDFSPacket {
     Assert.assertEquals(new SpanId(0, 123), parents[1]);
     Assert.assertEquals(new SpanId(0, 456), parents[2]);
     Assert.assertEquals(new SpanId(0, 789), parents[3]);
-  }
+  }*/
 }

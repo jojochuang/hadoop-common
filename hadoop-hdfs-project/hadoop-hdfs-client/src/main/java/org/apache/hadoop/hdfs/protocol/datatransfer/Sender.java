@@ -23,9 +23,16 @@ import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
+import io.opentracing.SpanContext;
+import io.opentracing.propagation.Format;
+import io.opentracing.propagation.TextMap;
+import io.opentracing.propagation.TextMapInjectAdapter;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
+import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
@@ -211,12 +218,19 @@ public class Sender implements DataTransferProtocol {
     ReleaseShortCircuitAccessRequestProto.Builder builder =
         ReleaseShortCircuitAccessRequestProto.newBuilder().
             setSlotId(PBHelperClient.convert(slotId));
-    SpanId spanId = Tracer.getCurrentSpanId();
-    if (spanId.isValid()) {
+
+    io.opentracing.Tracer tracer = FsTracer.get(null);
+    SpanContext spanContext = tracer.activeSpan().context();
+    Map<String, String> map = new HashMap<String, String>();
+    TextMap textMap = new TextMapInjectAdapter(map);
+    tracer.inject(spanContext, Format.Builtin.TEXT_MAP, textMap);
+
+    //SpanId spanId = Tracer.getCurrentSpanId();
+    //if (spanId.isValid()) {
       builder.setTraceInfo(DataTransferTraceInfoProto.newBuilder().
-          setTraceId(spanId.getHigh()).
-          setParentId(spanId.getLow()));
-    }
+          setTraceId(map.get("uber-trace-id")).
+          setParentId(0));
+    //}
     ReleaseShortCircuitAccessRequestProto proto = builder.build();
     send(out, Op.RELEASE_SHORT_CIRCUIT_FDS, proto);
   }
@@ -226,12 +240,19 @@ public class Sender implements DataTransferProtocol {
     ShortCircuitShmRequestProto.Builder builder =
         ShortCircuitShmRequestProto.newBuilder().
             setClientName(clientName);
-    SpanId spanId = Tracer.getCurrentSpanId();
-    if (spanId.isValid()) {
+
+    io.opentracing.Tracer tracer = FsTracer.get(null);
+    SpanContext spanContext = tracer.activeSpan().context();
+    Map<String, String> map = new HashMap<String, String>();
+    TextMap textMap = new TextMapInjectAdapter(map);
+    tracer.inject(spanContext, Format.Builtin.TEXT_MAP, textMap);
+
+    //SpanId spanId = Tracer.getCurrentSpanId();
+    //if (spanId.isValid()) {
       builder.setTraceInfo(DataTransferTraceInfoProto.newBuilder().
-          setTraceId(spanId.getHigh()).
-          setParentId(spanId.getLow()));
-    }
+          setTraceId(map.get("uber-trace-id")).
+          setParentId(0));
+    //}
     ShortCircuitShmRequestProto proto = builder.build();
     send(out, Op.REQUEST_SHORT_CIRCUIT_SHM, proto);
   }

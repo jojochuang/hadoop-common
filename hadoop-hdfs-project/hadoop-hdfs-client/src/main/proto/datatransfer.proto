@@ -52,7 +52,7 @@ message BaseHeaderProto {
 }
 
 message DataTransferTraceInfoProto {
-  required uint64 traceId = 1;
+  required string traceId = 1;
   required uint64 parentId = 2;
 }
 

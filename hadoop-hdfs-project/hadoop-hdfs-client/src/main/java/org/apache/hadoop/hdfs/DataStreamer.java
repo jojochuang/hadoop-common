@@ -43,6 +43,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.opentracing.Scope;
+import io.opentracing.SpanContext;
+import io.opentracing.Tracer;
+import io.opentracing.propagation.Format;
+import io.opentracing.propagation.TextMap;
+import io.opentracing.propagation.TextMapExtractAdapter;
+import io.opentracing.propagation.TextMapInjectAdapter;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.fs.StorageType;
@@ -76,10 +83,10 @@ import org.apache.hadoop.util.Daemon;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.util.Progressable;
 import org.apache.hadoop.util.Time;
-import org.apache.htrace.core.Span;
+/*import org.apache.htrace.core.Span;
 import org.apache.htrace.core.SpanId;
 import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
+import org.apache.htrace.core.Tracer;*/
 
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -655,7 +662,7 @@ class DataStreamer extends Daemon {
   @Override
   public void run() {
     long lastPacket = Time.monotonicNow();
-    TraceScope scope = null;
+    Scope scope = null;
     while (!streamerClosed && dfsClient.clientRunning) {
       // if the Responder encountered an error, shutdown Responder
       if (errorState.hasError()) {
@@ -699,11 +706,19 @@ class DataStreamer extends Daemon {
               LOG.warn("Caught exception", e);
             }
             one = dataQueue.getFirst(); // regular data packet
-            SpanId[] parents = one.getTraceParents();
+            String[] parents = one.getTraceParents();
             if (parents.length > 0) {
               /*scope = dfsClient.getTracer().
                   newScope("dataStreamer", parents[0]);
               scope.getSpan().setParents(parents);*/
+
+              Map<String, String> map = new HashMap<String, String>();
+              map.put("uber-trace-id", parents[0]);
+              TextMap textMap = new TextMapExtractAdapter(map);
+              Tracer tracer = FsTracer.get(null);
+              SpanContext parentContext =
+                  tracer.extract(Format.Builtin.TEXT_MAP, textMap);
+              scope = tracer.buildSpan("dataStreamer").asChildOf(parentContext).startActive(false);
             }
           }
         }
@@ -750,13 +765,13 @@ class DataStreamer extends Daemon {
         }
 
         // send the packet
-        SpanId spanId = SpanId.INVALID;
+        SpanContext spanContext = null; //= SpanId.INVALID;
         synchronized (dataQueue) {
           // move packet from dataQueue to ackQueue
           if (!one.isHeartbeatPacket()) {
             if (scope != null) {
-              spanId = scope.getSpanId();
-              scope.detach();
+              spanContext = scope.span().context();
+              //scope.detach();
               one.setTraceScope(scope);
             }
             scope = null;
@@ -770,8 +785,8 @@ class DataStreamer extends Daemon {
         LOG.debug("{} sending {}", this, one);
 
         // write out data to remote datanode
-        try /*(TraceScope ignored = dfsClient.getTracer().
-            newScope("DataStreamer#writeTo", spanId)) */{
+        try (Scope ignored = dfsClient.getTracer().
+            buildSpan("DataStreamer#writeTo").asChildOf(spanContext).startActive(true)) {
           one.writeTo(blockStream);
           blockStream.flush();
         } catch (IOException e) {
@@ -1085,7 +1100,7 @@ class DataStreamer extends Daemon {
       setName("ResponseProcessor for block " + block);
       PipelineAck ack = new PipelineAck();
 
-      TraceScope scope = null;
+      Scope scope = null;
       while (!responderClosed && dfsClient.clientRunning && !isLastPacketInBlock) {
         // process responses from datanodes.
         try {
@@ -1180,7 +1195,7 @@ class DataStreamer extends Daemon {
           synchronized (dataQueue) {
             scope = one.getTraceScope();
             if (scope != null) {
-              scope.reattach();
+              //scope.reattach();
               one.setTraceScope(null);
             }
             lastAckedSeqno = seqno;
@@ -1276,9 +1291,9 @@ class DataStreamer extends Daemon {
         synchronized (dataQueue) {
           DFSPacket endOfBlockPacket = dataQueue.remove();  // remove the end of block packet
           // Close any trace span associated with this Packet
-          TraceScope scope = endOfBlockPacket.getTraceScope();
+          Scope scope = endOfBlockPacket.getTraceScope();
           if (scope != null) {
-            scope.reattach();
+            //scope.reattach();
             scope.close();
             endOfBlockPacket.setTraceScope(null);
           }
@@ -1683,8 +1698,13 @@ class DataStreamer extends Daemon {
       nextStorageIDs = lb.getStorageIDs();
 
       // Connect to first DataNode in the list.
-      success = createBlockOutputStream(nodes, nextStorageTypes, nextStorageIDs,
-          0L, false);
+      Tracer tracer = FsTracer.get(null);
+      try (Scope scope = tracer.buildSpan("nextBlockOutputStream").startActive(true)) {
+        scope.span().setTag("block", lb.getBlock().toString());
+        success =
+            createBlockOutputStream(nodes, nextStorageTypes, nextStorageIDs, 0L,
+                false);
+      }
 
       if (!success) {
         LOG.warn("Abandoning " + block);
@@ -1726,7 +1746,9 @@ class DataStreamer extends Daemon {
     while (true) {
       boolean result = false;
       DataOutputStream out = null;
-      try {
+      Tracer tracer = FsTracer.get(null);
+      try (Scope scope = tracer.buildSpan("createBlockOutputStream").startActive(true)) {
+        scope.span().setTag("primary", nodes[0].getName());
         assert null == s : "Previous socket unclosed";
         assert null == blockReplyStream : "Previous blockReplyStream unclosed";
         s = createSocketForPipeline(nodes[0], nodes.length, dfsClient);
@@ -1954,7 +1976,19 @@ class DataStreamer extends Daemon {
   void queuePacket(DFSPacket packet) {
     synchronized (dataQueue) {
       if (packet == null) return;
-      packet.addTraceParent(Tracer.getCurrentSpanId());
+
+      Tracer tracer = FsTracer.get(null);
+      SpanContext spanContext = tracer.activeSpan().context();
+      Map<String, String> map = new HashMap<String, String>();
+      TextMap textMap = new TextMapInjectAdapter(map);
+      tracer.inject(spanContext, Format.Builtin.TEXT_MAP, textMap);
+      packet.addTraceParent(map.get("uber-trace-id"));
+
+      /*TextMap outMap = new TextMapExtractAdapter(map);
+      SpanContext outContext =
+          tracer.extract(Format.Builtin.TEXT_MAP, outMap);
+      assert outContext.equals(spanContext);*/
+
       dataQueue.addLast(packet);
       lastQueuedSeqno = packet.getSeqno();
       LOG.debug("Queued {}, {}", packet, this);

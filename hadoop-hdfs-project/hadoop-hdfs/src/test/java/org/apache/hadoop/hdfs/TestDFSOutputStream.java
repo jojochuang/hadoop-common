@@ -292,7 +292,7 @@ public class TestDFSOutputStream {
         Whitebox.getInternalState(stream, "congestedNodes");
     congestedNodes.add(mock(DatanodeInfo.class));
     DFSPacket packet = mock(DFSPacket.class);
-    when(packet.getTraceParents()).thenReturn(new SpanId[] {});
+    when(packet.getTraceParents()).thenReturn(new String[] {});
     dataQueue.add(packet);
     stream.run();
     Assert.assertTrue(congestedNodes.isEmpty());
