@@ -89,6 +89,7 @@ import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_REPLICATION_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_REPLICATION_KEY;
 import static org.apache.hadoop.hdfs.server.namenode.FSDirStatAndListingOp.*;
 
+import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicyInfo;
 import org.apache.hadoop.hdfs.protocol.OpenFilesIterator.OpenFilesType;
 import org.apache.hadoop.hdfs.protocol.ReplicatedBlockStats;
@@ -2841,7 +2842,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     checkOperation(OperationCategory.WRITE);
     FSPermissionChecker pc = getPermissionChecker();
     writeLock();
-    try {
+    try (io.opentracing.Scope ignored = FsTracer.get(null).buildSpan("FSNamesystem#completeFile").startActive(true)) {
       checkOperation(OperationCategory.WRITE);
       checkNameNodeSafeMode("Cannot complete file " + src);
       success = FSDirWriteFileOp.completeFile(this, pc, src, holder, last,
@@ -2849,6 +2850,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     } finally {
       writeUnlock("completeFile");
     }
+
     getEditLog().logSync();
     if (success) {
       NameNode.stateChangeLog.info("DIR* completeFile: " + src
@@ -4308,7 +4310,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     checkSuperuserPrivilege();
     checkOperation(OperationCategory.UNCHECKED);
     readLock();
-    try {
+    try (io.opentracing.Scope ignored = FsTracer.get(null).buildSpan("FSNamesystem#datanodeReport").startActive(true)) {
       checkOperation(OperationCategory.UNCHECKED);
       final DatanodeManager dm = getBlockManager().getDatanodeManager();      
       final List<DatanodeDescriptor> results = dm.getDatanodeListForReport(type);

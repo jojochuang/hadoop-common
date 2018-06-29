@@ -25,6 +25,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.classification.InterfaceStability.Unstable;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.retry.RetryPolicy;
 import org.apache.hadoop.ipc.Client.ConnectionId;
@@ -207,11 +208,13 @@ public class ProtobufRpcEngine implements RpcEngine {
       // if Tracing is on then start a new span for this rpc.
       // guard it in the if statement to make sure there isn't
       // any extra string manipulation.
-      Tracer tracer = Tracer.curThreadTracer();
+      /*Tracer tracer = Tracer.curThreadTracer();
       TraceScope traceScope = null;
       if (tracer != null) {
         traceScope = tracer.newScope(RpcClientUtil.methodToTraceString(method));
-      }
+      }*/
+      io.opentracing.Tracer tracer = FsTracer.get(null);
+      io.opentracing.Scope scope = tracer.buildSpan(RpcClientUtil.methodToTraceString(method)).startActive(true);
 
       RequestHeaderProto rpcRequestHeader = constructRpcRequestHeader(method);
       
@@ -235,13 +238,15 @@ public class ProtobufRpcEngine implements RpcEngine {
               remoteId + ": " + method.getName() +
                 " {" + e + "}");
         }
-        if (traceScope != null) {
+        /*if (traceScope != null) {
           traceScope.addTimelineAnnotation("Call got exception: " +
               e.toString());
-        }
+        }*/
+        scope.span().log("Call got exception: " + e.toString());
         throw new ServiceException(e);
       } finally {
-        if (traceScope != null) traceScope.close();
+        //if (traceScope != null) traceScope.close();
+        scope.close();
       }
 
       if (LOG.isDebugEnabled()) {

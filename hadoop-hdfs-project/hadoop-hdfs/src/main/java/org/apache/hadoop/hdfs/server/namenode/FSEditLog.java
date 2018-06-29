@@ -34,6 +34,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.fs.Options;
 import org.apache.hadoop.fs.XAttr;
 import org.apache.hadoop.fs.permission.AclEntry;
@@ -642,7 +643,9 @@ public class FSEditLog implements LogsPurgeable {
    */
   public void logSync() {
     // Fetch the transactionId of this thread.
-    logSync(myTransactionId.get().txid);
+    try (io.opentracing.Scope ignored = FsTracer.get(null).buildSpan("FSEditLog#logSync").startActive(true)) {
+      logSync(myTransactionId.get().txid);
+    }
   }
 
   protected void logSync(long mytxid) {
