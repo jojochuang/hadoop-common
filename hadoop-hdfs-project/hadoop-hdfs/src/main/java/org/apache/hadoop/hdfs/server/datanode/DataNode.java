@@ -48,6 +48,7 @@ import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_METRICS_LOGGER_P
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_METRICS_LOGGER_PERIOD_SECONDS_KEY;
 import static org.apache.hadoop.util.ExitUtil.terminate;
 
+import io.opentracing.Tracer;
 import io.opentracing.util.GlobalTracer;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.hdfs.protocol.proto.ReconfigurationProtocolProtos.ReconfigurationProtocolService;
@@ -214,7 +215,6 @@ import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Time;
 import org.apache.hadoop.util.Timer;
 import org.apache.hadoop.util.VersionInfo;
-import org.apache.htrace.core.Tracer;
 import org.eclipse.jetty.util.ajax.JSON;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -412,9 +412,10 @@ public class DataNode extends ReconfigurableBase
       GlobalTracer.register(tracer);
     }
 
-    return new Tracer.Builder("DataNode").
-        conf(TraceUtils.wrapHadoopConf(DATANODE_HTRACE_PREFIX , conf)).
-        build();
+//    return new Tracer.Builder("DataNode").
+//        conf(TraceUtils.wrapHadoopConf(DATANODE_HTRACE_PREFIX , conf)).
+//        build();
+    return GlobalTracer.get();
   }
 
   private long[] oobTimeouts; /** timeout value of each OOB type */
@@ -2130,7 +2131,7 @@ public class DataNode extends ReconfigurableBase
       // Notify the main thread.
       notifyAll();
     }
-    tracer.close();
+//    tracer.close();
   }
 
   /**

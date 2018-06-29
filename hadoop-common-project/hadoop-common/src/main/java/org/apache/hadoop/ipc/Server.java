@@ -120,8 +120,6 @@ import org.apache.hadoop.util.ProtoUtil;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Time;
 import org.apache.htrace.core.SpanId;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
@@ -130,6 +128,10 @@ import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.opentracing.Scope;
+import io.opentracing.Span;
+import io.opentracing.Tracer;
 
 /** An abstract IPC service.  IPC calls take a single {@link Writable} as a
  * parameter, and return a {@link Writable} as their value.  A service runs on
@@ -715,6 +717,7 @@ public abstract class Server {
     }
 
     Call(int id, int retryCount, RPC.RpcKind kind, byte[] clientId,
+
         io.opentracing.Scope traceScope, CallerContext callerContext) {
       this.callId = id;
       this.retryCount = retryCount;
@@ -2453,6 +2456,7 @@ public abstract class Server {
             RpcErrorCodeProto.FATAL_DESERIALIZING_REQUEST, err);
       }
         
+
       //TraceScope traceScope = null;
       io.opentracing.Scope scope = null;
       if (header.hasTraceInfo()) {
@@ -2702,6 +2706,7 @@ public abstract class Server {
         } catch (InterruptedException e) {
           if (running) {                          // unexpected -- log it
             LOG.info(Thread.currentThread().getName() + " unexpectedly interrupted", e);
+
             if (callScope != null) {
               callScope.span().log("unexpectedly interrupted: " +
                   StringUtils.stringifyException(e));
@@ -2709,6 +2714,7 @@ public abstract class Server {
           }
         } catch (Exception e) {
           LOG.info(Thread.currentThread().getName() + " caught an exception", e);
+
           if (callScope != null) {
             callScope.span().log("Exception: " +
                 StringUtils.stringifyException(e));

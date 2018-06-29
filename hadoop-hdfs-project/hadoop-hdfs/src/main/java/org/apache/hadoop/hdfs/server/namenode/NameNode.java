@@ -89,9 +89,11 @@ import org.apache.hadoop.util.JvmPauseMonitor;
 import org.apache.hadoop.util.ServicePlugin;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Time;
-import org.apache.htrace.core.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.opentracing.Tracer;
+import io.opentracing.util.GlobalTracer;
 
 import javax.management.ObjectName;
 
@@ -934,9 +936,23 @@ public class NameNode extends ReconfigurableBase implements
   protected NameNode(Configuration conf, NamenodeRole role)
       throws IOException {
     super(conf);
-    this.tracer = new Tracer.Builder("NameNode").
-        conf(TraceUtils.wrapHadoopConf(NAMENODE_HTRACE_PREFIX, conf)).
-        build();
+//    this.tracer = new Tracer.Builder("NameNode").
+//        conf(TraceUtils.wrapHadoopConf(NAMENODE_HTRACE_PREFIX, conf)).
+//        build();
+
+
+    if (!GlobalTracer.isRegistered()) {
+      com.uber.jaeger.Configuration jaegerConf =
+          new com.uber.jaeger.Configuration(
+              "NameNode",
+              new com.uber.jaeger.Configuration.SamplerConfiguration("const", 1),
+              new com.uber.jaeger.Configuration.ReporterConfiguration(
+                  false, "va1022.halxg.cloudera.com", 6831, 1000, 10000)
+          );
+      io.opentracing.Tracer tracer = jaegerConf.getTracer();
+      GlobalTracer.register(tracer);
+    }
+    this.tracer = GlobalTracer.get();
 
     this.otracer =
         FsTracer.get(null);
@@ -1040,7 +1056,7 @@ public class NameNode extends ReconfigurableBase implements
         nameNodeStatusBeanName = null;
       }
     }
-    tracer.close();
+//    tracer.close();
   }
 
   synchronized boolean isStopRequested() {

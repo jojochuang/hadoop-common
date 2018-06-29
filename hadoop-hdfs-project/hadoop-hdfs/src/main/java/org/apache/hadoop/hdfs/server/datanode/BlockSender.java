@@ -49,7 +49,6 @@ import org.apache.hadoop.io.ReadaheadPool.ReadaheadRequest;
 import org.apache.hadoop.net.SocketOutputStream;
 import org.apache.hadoop.util.AutoCloseableLock;
 import org.apache.hadoop.util.DataChecksum;
-import org.apache.htrace.core.TraceScope;
 
 import static org.apache.hadoop.io.nativeio.NativeIO.POSIX.POSIX_FADV_DONTNEED;
 import static org.apache.hadoop.io.nativeio.NativeIO.POSIX.POSIX_FADV_SEQUENTIAL;
@@ -57,6 +56,8 @@ import static org.apache.hadoop.io.nativeio.NativeIO.POSIX.POSIX_FADV_SEQUENTIAL
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
+
+import io.opentracing.Scope;
 
 /**
  * Reads a block from the disk and sends it to a recipient.
@@ -744,12 +745,12 @@ class BlockSender implements java.io.Closeable {
    */
   long sendBlock(DataOutputStream out, OutputStream baseStream, 
                  DataTransferThrottler throttler) throws IOException {
-    final TraceScope scope = datanode.getTracer().
-        newScope("sendBlock_" + block.getBlockId());
-    try {
+//    final TraceScope scope = datanode.getTracer().
+//        newScope("sendBlock_" + block.getBlockId());
+    try (Scope scope = datanode.getTracer().buildSpan("sendBlock_" + block.getBlockId()).startActive(true)) {
       return doSendBlock(out, baseStream, throttler);
     } finally {
-      scope.close();
+//      scope.close();
     }
   }
 
