@@ -2467,7 +2467,7 @@ public abstract class Server {
         }
       }
       */
-      Span traceSpan = tracer.buildSpan("dummyRpcSpan").startManual();
+      Span traceSpan = tracer.buildSpan(RpcClientUtil.toTraceName(rpcRequest.toString())).startManual();
 
       CallerContext callerContext = null;
       if (header.hasCallerContext()) {
