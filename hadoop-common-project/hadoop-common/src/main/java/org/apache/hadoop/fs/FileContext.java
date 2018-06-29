@@ -223,7 +223,7 @@ public class FileContext {
   private final Configuration conf;
   private final UserGroupInformation ugi;
   final boolean resolveSymlinks;
-  private final io.opentracing.Tracer tracer;
+  private final Tracer tracer;
 
   private FileContext(final AbstractFileSystem defFs,
                       final Configuration aConf) {
@@ -2780,7 +2780,7 @@ public class FileContext {
     return defaultFS.getAllStoragePolicies();
   }
 
-  io.opentracing.Tracer getTracer() {
+  Tracer getTracer() {
     return tracer;
   }
 }

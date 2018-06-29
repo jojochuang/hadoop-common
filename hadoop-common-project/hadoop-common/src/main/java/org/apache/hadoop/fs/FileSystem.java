@@ -3280,11 +3280,9 @@ public abstract class FileSystem extends Configured implements Closeable {
    */
   private static FileSystem createFileSystem(URI uri, Configuration conf)
       throws IOException {
-    io.opentracing.Tracer tracer = FsTracer.get(conf);
-//    try(TraceScope scope = tracer.newScope("FileSystem#createFileSystem")) {
-    try(io.opentracing.Scope scope =
-        tracer.buildSpan("FileSystem#createFileSystem").startActive(true)) {
-      // scope.addKVAnnotation("scheme", uri.getScheme());
+    Tracer tracer = FsTracer.get(conf);
+    try(TraceScope scope = tracer.newScope("FileSystem#createFileSystem")) {
+      scope.addKVAnnotation("scheme", uri.getScheme());
       Class<?> clazz = getFileSystemClass(uri.getScheme(), conf);
       FileSystem fs = (FileSystem)ReflectionUtils.newInstance(clazz, conf);
       fs.initialize(uri, conf);

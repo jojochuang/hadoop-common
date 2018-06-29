@@ -41,7 +41,7 @@ class Globber {
   private final FileContext fc;
   private final Path pathPattern;
   private final PathFilter filter;
-  private final io.opentracing.Tracer tracer;
+  private final Tracer tracer;
   
   public Globber(FileSystem fs, Path pathPattern, PathFilter filter) {
     this.fs = fs;
@@ -143,13 +143,12 @@ class Globber {
   }
 
   public FileStatus[] glob() throws IOException {
-//    TraceScope scope = tracer.newScope("Globber#glob");
-//    scope.addKVAnnotation("pattern", pathPattern.toUri().getPath());
-    try (io.opentracing.Scope scope =
-        tracer.buildSpan("Globber#glob").startActive(true)){
+    TraceScope scope = tracer.newScope("Globber#glob");
+    scope.addKVAnnotation("pattern", pathPattern.toUri().getPath());
+    try {
       return doGlob();
     } finally {
-//      scope.close();
+      scope.close();
     }
   }
 
