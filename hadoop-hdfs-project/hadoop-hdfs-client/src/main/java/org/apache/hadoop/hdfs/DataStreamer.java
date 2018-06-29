@@ -44,6 +44,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.BlockWrite;
 import org.apache.hadoop.hdfs.client.impl.DfsClientConf;
@@ -918,10 +919,12 @@ class DataStreamer extends Daemon {
           while (!streamerClosed && dataQueue.size() + ackQueue.size() >
               dfsClient.getConf().getWriteMaxPackets()) {
             if (firstWait) {
-              Span span = Tracer.getCurrentSpan();
+              /*Span span = Tracer.getCurrentSpan();
               if (span != null) {
                 span.addTimelineAnnotation("dataQueue.wait");
-              }
+              }*/
+              io.opentracing.Tracer tracer = FsTracer.get(null);
+              tracer.activeSpan().log("dataQueue.wait");
               firstWait = false;
             }
             try {
@@ -939,9 +942,13 @@ class DataStreamer extends Daemon {
             }
           }
         } finally {
-          Span span = Tracer.getCurrentSpan();
+          /*Span span = Tracer.getCurrentSpan();
           if ((span != null) && (!firstWait)) {
             span.addTimelineAnnotation("end.wait");
+          }*/
+          io.opentracing.Tracer tracer = FsTracer.get(null);
+          if (!firstWait) {
+            tracer.activeSpan().log("end.wait");
           }
         }
         checkClosed();

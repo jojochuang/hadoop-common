@@ -20,7 +20,15 @@ package org.apache.hadoop.util;
 
 import java.io.DataInput;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
+import io.opentracing.SpanContext;
+import io.opentracing.propagation.Format;
+import io.opentracing.propagation.TextMap;
+import io.opentracing.propagation.TextMapInjectAdapter;
+import org.apache.hadoop.fs.FsTracer;
 import org.apache.hadoop.ipc.CallerContext;
 import org.apache.hadoop.ipc.RPC;
 import org.apache.hadoop.ipc.protobuf.IpcConnectionContextProtos.IpcConnectionContextProto;
@@ -170,13 +178,24 @@ public abstract class ProtoUtil {
         .setRetryCount(retryCount).setClientId(ByteString.copyFrom(uuid));
 
     // Add tracing info if we are currently tracing.
-    Span span = Tracer.getCurrentSpan();
+    /*Span span = Tracer.getCurrentSpan();
     if (span != null) {
       result.setTraceInfo(RPCTraceInfoProto.newBuilder()
           .setTraceId(span.getSpanId().getHigh())
           .setParentId(span.getSpanId().getLow())
             .build());
-    }
+    }*/
+    io.opentracing.Tracer tracer = FsTracer.get(null);
+    //ByteBuffer buffer = null;
+    //SpanContext spanContext = tracer.extract(Format.Builtin.BINARY, buffer);
+    SpanContext spanContext = tracer.activeSpan().context();
+    Map<String, String> map = new HashMap<String, String>();
+    TextMap textMap = new TextMapInjectAdapter(map);
+    tracer.inject(spanContext, Format.Builtin.TEXT_MAP, textMap);
+    result.setTraceInfo(RPCTraceInfoProto.newBuilder()
+        .setTraceId(map.get("uber-trace-id"))
+        .setParentId(0)
+        .build());
 
     // Add caller context if it is not null
     CallerContext callerContext = CallerContext.getCurrent();
