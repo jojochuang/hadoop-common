@@ -115,8 +115,6 @@ import org.apache.hadoop.util.ProtoUtil;
 import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Time;
 import org.apache.htrace.core.SpanId;
-import org.apache.htrace.core.TraceScope;
-import org.apache.htrace.core.Tracer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
@@ -125,6 +123,10 @@ import com.google.protobuf.CodedOutputStream;
 import com.google.protobuf.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import io.opentracing.Scope;
+import io.opentracing.Span;
+import io.opentracing.Tracer;
 
 /** An abstract IPC service.  IPC calls take a single {@link Writable} as a
  * parameter, and return a {@link Writable} as their value.  A service runs on
@@ -682,7 +684,7 @@ public abstract class Server {
     private AtomicInteger responseWaitCount = new AtomicInteger(1);
     final RPC.RpcKind rpcKind;
     final byte[] clientId;
-    private final TraceScope traceScope; // the HTrace scope on the server side
+    private final Span traceSpan; // the HTrace scope on the server side
     private final CallerContext callerContext; // the call context
     private boolean deferredResponse = false;
     private int priorityLevel;
@@ -695,7 +697,7 @@ public abstract class Server {
 
     Call(Call call) {
       this(call.callId, call.retryCount, call.rpcKind, call.clientId,
-          call.traceScope, call.callerContext);
+          call.traceSpan, call.callerContext);
     }
 
     Call(int id, int retryCount, RPC.RpcKind kind, byte[] clientId) {
@@ -709,13 +711,13 @@ public abstract class Server {
     }
 
     Call(int id, int retryCount, RPC.RpcKind kind, byte[] clientId,
-        TraceScope traceScope, CallerContext callerContext) {
+        Span traceSpan, CallerContext callerContext) {
       this.callId = id;
       this.retryCount = retryCount;
       this.timestamp = Time.now();
       this.rpcKind = kind;
       this.clientId = clientId;
-      this.traceScope = traceScope;
+      this.traceSpan = traceSpan;
       this.callerContext = callerContext;
     }
 
@@ -835,8 +837,8 @@ public abstract class Server {
 
     RpcCall(Connection connection, int id, int retryCount,
         Writable param, RPC.RpcKind kind, byte[] clientId,
-        TraceScope traceScope, CallerContext context) {
-      super(id, retryCount, kind, clientId, traceScope, context);
+        Span traceSpan, CallerContext context) {
+      super(id, retryCount, kind, clientId, traceSpan, context);
       this.connection = connection;
       this.rpcRequest = param;
     }
@@ -2447,20 +2449,22 @@ public abstract class Server {
             RpcErrorCodeProto.FATAL_DESERIALIZING_REQUEST, err);
       }
         
-      TraceScope traceScope = null;
-      if (header.hasTraceInfo()) {
-        if (tracer != null) {
-          // If the incoming RPC included tracing info, always continue the
-          // trace
-          SpanId parentSpanId = new SpanId(
-              header.getTraceInfo().getTraceId(),
-              header.getTraceInfo().getParentId());
-          traceScope = tracer.newScope(
-              RpcClientUtil.toTraceName(rpcRequest.toString()),
-              parentSpanId);
-          traceScope.detach();
-        }
-      }
+      // FIXME: need to retrive from protobuf
+//      TraceScope traceScope = null;
+//      if (header.hasTraceInfo()) {
+//        if (tracer != null) {
+//          // If the incoming RPC included tracing info, always continue the
+//          // trace
+//          SpanId parentSpanId = new SpanId(
+//              header.getTraceInfo().getTraceId(),
+//              header.getTraceInfo().getParentId());
+//          traceScope = tracer.newScope(
+//              RpcClientUtil.toTraceName(rpcRequest.toString()),
+//              parentSpanId);
+//          traceScope.detach();
+//        }
+//      }
+      Span traceSpan = tracer.buildSpan( RpcClientUtil.toTraceName(rpcRequest.toString())).startManual();
 
       CallerContext callerContext = null;
       if (header.hasCallerContext()) {
@@ -2474,7 +2478,7 @@ public abstract class Server {
       RpcCall call = new RpcCall(this, header.getCallId(),
           header.getRetryCount(), rpcRequest,
           ProtoUtil.convert(header.getRpcKind()),
-          header.getClientId().toByteArray(), traceScope, callerContext);
+          header.getClientId().toByteArray(), traceSpan, callerContext);
 
       // Save the priority level assignment by the scheduler
       call.setPriorityLevel(callQueue.getPriorityLevel(call));
@@ -2656,17 +2660,16 @@ public abstract class Server {
       LOG.debug(Thread.currentThread().getName() + ": starting");
       SERVER.set(Server.this);
       while (running) {
-        TraceScope traceScope = null;
+        Scope traceScope = null;
         try {
           final Call call = callQueue.take(); // pop the queue; maybe blocked here
           if (LOG.isDebugEnabled()) {
             LOG.debug(Thread.currentThread().getName() + ": " + call + " for RpcKind " + call.rpcKind);
           }
           CurCall.set(call);
-          if (call.traceScope != null) {
-            call.traceScope.reattach();
-            traceScope = call.traceScope;
-            traceScope.getSpan().addTimelineAnnotation("called");
+          if (call.traceSpan != null) {
+            traceScope = tracer.scopeManager().activate(call.traceSpan, true);
+            traceScope.span().log("called");
           }
           // always update the current call context
           CallerContext.setCurrent(call.callerContext);
@@ -2680,14 +2683,14 @@ public abstract class Server {
           if (running) {                          // unexpected -- log it
             LOG.info(Thread.currentThread().getName() + " unexpectedly interrupted", e);
             if (traceScope != null) {
-              traceScope.getSpan().addTimelineAnnotation("unexpectedly interrupted: " +
+              traceScope.span().log("unexpectedly interrupted: " +
                   StringUtils.stringifyException(e));
             }
           }
         } catch (Exception e) {
           LOG.info(Thread.currentThread().getName() + " caught an exception", e);
           if (traceScope != null) {
-            traceScope.getSpan().addTimelineAnnotation("Exception: " +
+            traceScope.span().log("Exception: " +
                 StringUtils.stringifyException(e));
           }
         } finally {
