@@ -89,6 +89,8 @@ import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_REPLICATION_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_REPLICATION_KEY;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import static org.apache.hadoop.hdfs.server.namenode.FSDirStatAndListingOp.*;
+import static org.apache.hadoop.ha.HAServiceProtocol.HAServiceState.ACTIVE;
+import static org.apache.hadoop.ha.HAServiceProtocol.HAServiceState.OBSERVER;
 
 import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicyInfo;
 import org.apache.hadoop.hdfs.protocol.OpenFilesIterator.OpenFilesType;
@@ -451,7 +453,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
   /** The namespace tree. */
   FSDirectory dir;
-  private final BlockManager blockManager;
+  private BlockManager blockManager;
   private final SnapshotManager snapshotManager;
   private final CacheManager cacheManager;
   private final DatanodeStatistics datanodeStatistics;
@@ -1916,7 +1918,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
             SafeModeException se = newSafemodeException(
                 "Zero blocklocations for " + srcArg);
             if (haEnabled && haContext != null &&
-                haContext.getState().getServiceState() == HAServiceState.ACTIVE) {
+                (haContext.getState().getServiceState() == ACTIVE ||
+                    haContext.getState().getServiceState() == OBSERVER)) {
               throw new RetriableException(se);
             } else {
               throw se;
@@ -6147,6 +6150,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   /** @return the block manager. */
   public BlockManager getBlockManager() {
     return blockManager;
+  }
+
+  @VisibleForTesting
+  public void setBlockManagerForTesting(BlockManager bm) {
+    this.blockManager = bm;
   }
 
   /** @return the FSDirectory. */
