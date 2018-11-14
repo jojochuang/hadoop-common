@@ -35,6 +35,7 @@ import "xattr.proto";
 import "encryption.proto";
 import "inotify.proto";
 import "erasurecoding.proto";
+import "HAServiceProtocol.proto";
 
 /**
  * The ClientNamenodeProtocol Service defines the interface between a client 
@@ -810,6 +811,24 @@ message MsyncRequestProto {
 message MsyncResponseProto {
 }
 
+<<<<<<< HEAD
+=======
+message SatisfyStoragePolicyRequestProto {
+  required string src = 1;
+}
+
+message SatisfyStoragePolicyResponseProto {
+
+}
+
+message HAServiceStateRequestProto {
+}
+
+message HAServiceStateResponseProto {
+  required hadoop.common.HAServiceStateProto state = 1;
+}
+
+>>>>>>> 652b257... HDFS-14035. NN status discovery does not leverage delegation token. Contributed by Chen Liang.
 service ClientNamenodeProtocol {
   rpc getBlockLocations(GetBlockLocationsRequestProto)
       returns(GetBlockLocationsResponseProto);
@@ -992,4 +1011,6 @@ service ClientNamenodeProtocol {
       returns(ListOpenFilesResponseProto);
   rpc msync(MsyncRequestProto)
       returns(MsyncResponseProto);
+  rpc getHAServiceState(HAServiceStateRequestProto)
+      returns(HAServiceStateResponseProto);
 }
