@@ -811,15 +811,6 @@ message MsyncRequestProto {
 message MsyncResponseProto {
 }
 
-<<<<<<< HEAD
-=======
-message SatisfyStoragePolicyRequestProto {
-  required string src = 1;
-}
-
-message SatisfyStoragePolicyResponseProto {
-
-}
 
 message HAServiceStateRequestProto {
 }
@@ -828,7 +819,6 @@ message HAServiceStateResponseProto {
   required hadoop.common.HAServiceStateProto state = 1;
 }
 
->>>>>>> 652b257... HDFS-14035. NN status discovery does not leverage delegation token. Contributed by Chen Liang.
 service ClientNamenodeProtocol {
   rpc getBlockLocations(GetBlockLocationsRequestProto)
       returns(GetBlockLocationsResponseProto);
