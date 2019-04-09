@@ -61,10 +61,11 @@ import org.apache.hadoop.ipc.UnexpectedServerException;
 import org.apache.hadoop.security.AccessControlException;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.token.Token;
+import org.apache.hadoop.tracing.Tracer;
 import org.apache.hadoop.util.ShutdownHookManager;
 
 import com.google.common.base.Preconditions;
-import org.apache.htrace.core.Tracer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

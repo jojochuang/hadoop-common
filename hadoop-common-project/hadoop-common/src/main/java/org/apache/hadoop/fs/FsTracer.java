@@ -22,7 +22,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.tracing.TraceUtils;
-import org.apache.htrace.core.Tracer;
+import org.apache.hadoop.tracing.Tracer;
 
 /**
  * Holds the HTrace Tracer used for FileSystem operations.
@@ -39,6 +39,7 @@ public final class FsTracer {
 
   public static synchronized Tracer get(Configuration conf) {
     if (instance == null) {
+      // TODO: instantiate HTrace or OpenTracing
       instance = new Tracer.Builder("FSClient").
           conf(TraceUtils.wrapHadoopConf(CommonConfigurationKeys.
               FS_CLIENT_HTRACE_PREFIX, conf)).
