@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.crypto.key.kms.server;
 
+import com.codahale.metrics.Gauge;
 import com.codahale.metrics.JmxReporter;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
@@ -69,6 +70,20 @@ public class KMSWebApp implements ServletContextListener {
   private static final String REENCRYPT_EEK_BATCH_METER = METRICS_PREFIX +
       "reencrypt_eek_batch.calls.meter";
 
+  private static final String KEY_VALUE_CACHE_STAT = METRICS_PREFIX +
+      "key_value_cache.stat";
+  private static final String KEY_METADATA_CACHE_STAT = METRICS_PREFIX +
+      "key_metadata_cache.stat";
+  private static final String CURRENT_KEY_CACHE_STAT = METRICS_PREFIX +
+      "current_key_cache.stat";
+
+  private static final String KEY_VALUE_CACHE_HIT = METRICS_PREFIX +
+      "key_value_cache.hit";
+  private static final String KEY_METADATA_CACHE_HIT = METRICS_PREFIX +
+      "key_metadata_cache.hit";
+  private static final String CURRENT_KEY_CACHE_HIT = METRICS_PREFIX +
+      "current_key_cache.hit";
+
   private static Logger LOG;
   private static MetricRegistry metricRegistry;
 
@@ -84,6 +99,7 @@ public class KMSWebApp implements ServletContextListener {
   private static Meter reencryptEEKBatchCallsMeter;
   private static Meter generateEEKCallsMeter;
   private static Meter invalidCallsMeter;
+
   private static KMSAudit kmsAudit;
   private static KeyProviderCryptoExtension keyProviderCryptoExtension;
 
@@ -186,6 +202,55 @@ public class KMSWebApp implements ServletContextListener {
                 KMSConfiguration.CURR_KEY_CACHE_TIMEOUT_DEFAULT);
         keyProvider = new CachingKeyProvider(keyProvider, keyTimeOutMillis,
             currKeyTimeOutMillis);
+
+        final KeyProvider finalKeyProvider = keyProvider;
+        metricRegistry.register(
+            KEY_VALUE_CACHE_STAT, new Gauge<String>() {
+              @Override
+              public String getValue() {
+                return ((CachingKeyProvider)finalKeyProvider).getKeyVersionCacheStat().toString();
+              }
+            });
+
+        metricRegistry.register(
+            KEY_METADATA_CACHE_STAT, new Gauge<String>() {
+              @Override
+              public String getValue() {
+                return ((CachingKeyProvider)finalKeyProvider).getKeyMetadataCacheStat().toString();
+              }
+            });
+
+        metricRegistry.register(
+            CURRENT_KEY_CACHE_STAT, new Gauge<String>() {
+              @Override
+              public String getValue() {
+                return ((CachingKeyProvider)finalKeyProvider).getCurrentKeyCacheStat().toString();
+              }
+            });
+
+        metricRegistry.register(
+            KEY_VALUE_CACHE_HIT, new Gauge<Integer>() {
+              @Override
+              public Integer getValue() {
+                return ((CachingKeyProvider)finalKeyProvider).getKeyVersionCacheHit();
+              }
+            });
+
+        metricRegistry.register(
+            KEY_METADATA_CACHE_HIT, new Gauge<Integer>() {
+              @Override
+              public Integer getValue() {
+                return ((CachingKeyProvider)finalKeyProvider).getKeyMetadataCacheHit();
+              }
+            });
+
+        metricRegistry.register(
+            CURRENT_KEY_CACHE_HIT, new Gauge<Integer>() {
+              @Override
+              public Integer getValue() {
+                return ((CachingKeyProvider)finalKeyProvider).getCurrentKeyCacheHit();
+              }
+            });
       }
       LOG.info("Initialized KeyProvider " + keyProvider);
 

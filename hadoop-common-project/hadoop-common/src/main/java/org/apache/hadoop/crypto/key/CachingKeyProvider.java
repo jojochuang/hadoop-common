@@ -21,10 +21,14 @@ import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import org.apache.hadoop.metrics2.lib.MetricsRegistry;
+import org.apache.hadoop.metrics2.lib.MutableStat;
+import org.apache.hadoop.util.Time;
 
 /**
  * A <code>KeyProviderExtension</code> implementation providing a short lived
@@ -40,6 +44,29 @@ public class CachingKeyProvider extends
     private LoadingCache<String, KeyVersion> currentKeyCache;
     private LoadingCache<String, Metadata> keyMetadataCache;
 
+    private AtomicInteger keyVersionCacheMiss = new AtomicInteger();
+    private AtomicInteger keyMetadataCacheMiss = new AtomicInteger();
+    private AtomicInteger currentKeyCacheMiss = new AtomicInteger();
+
+    private AtomicInteger keyVersionCounter = new AtomicInteger();
+    private AtomicInteger keyMetadataCounter = new AtomicInteger();
+    private AtomicInteger currentKeyCounter = new AtomicInteger();
+
+    private MetricsRegistry registry = new MetricsRegistry("CachingKeyProvider");
+
+    MutableStat keyVersionCacheStat =
+        registry.newStat("KeyVersion", "Key Version Cache Stat", "Ops",
+            "latency", false);
+    MutableStat keyMetadataCacheStat =
+        registry.newStat("KeyMetadata", "Key Metadata Cache Stat", "Ops",
+            "latency", false);
+    MutableStat currentKeyCacheStat =
+        registry.newStat("CurrentKey", "Current Key Cache Stat", "Ops",
+            "latency", false);
+    //stat.add(1000);
+    //MetricsRecordBuilder rb;
+    //registry.snapshot(rb, false);
+
     CacheExtension(KeyProvider prov, long keyTimeoutMillis,
         long currKeyTimeoutMillis) {
       this.provider = prov;
@@ -49,10 +76,16 @@ public class CachingKeyProvider extends
               .build(new CacheLoader<String, KeyVersion>() {
                 @Override
                 public KeyVersion load(String key) throws Exception {
+
+                  final long startTime = Time.monotonicNow();
                   KeyVersion kv = provider.getKeyVersion(key);
                   if (kv == null) {
                     throw new KeyNotFoundException();
                   }
+                  final long endTime = Time.monotonicNow();
+
+                  keyVersionCacheStat.add(endTime - startTime);
+                  keyVersionCacheMiss.incrementAndGet();
                   return kv;
                 }
               });
@@ -62,10 +95,14 @@ public class CachingKeyProvider extends
               .build(new CacheLoader<String, Metadata>() {
                 @Override
                 public Metadata load(String key) throws Exception {
+                  final long startTime = Time.monotonicNow();
                   Metadata meta = provider.getMetadata(key);
                   if (meta == null) {
                     throw new KeyNotFoundException();
                   }
+                  final long endTime = Time.monotonicNow();
+                  keyMetadataCacheStat.add(endTime - startTime);
+                  keyMetadataCacheMiss.incrementAndGet();
                   return meta;
                 }
               });
@@ -75,10 +112,14 @@ public class CachingKeyProvider extends
           .build(new CacheLoader<String, KeyVersion>() {
             @Override
             public KeyVersion load(String key) throws Exception {
+              final long startTime = Time.monotonicNow();
               KeyVersion kv = provider.getCurrentKey(key);
               if (kv == null) {
                 throw new KeyNotFoundException();
               }
+              final long endTime = Time.monotonicNow();
+              currentKeyCacheStat.add(endTime - startTime);
+              currentKeyCacheMiss.incrementAndGet();
               return kv;
             }
           });
@@ -97,6 +138,7 @@ public class CachingKeyProvider extends
   @Override
   public KeyVersion getCurrentKey(String name) throws IOException {
     try {
+      getExtension().currentKeyCounter.incrementAndGet();
       return getExtension().currentKeyCache.get(name);
     } catch (ExecutionException ex) {
       Throwable cause = ex.getCause();
@@ -114,6 +156,7 @@ public class CachingKeyProvider extends
   public KeyVersion getKeyVersion(String versionName)
       throws IOException {
     try {
+      getExtension().keyVersionCounter.incrementAndGet();
       return getExtension().keyVersionCache.get(versionName);
     } catch (ExecutionException ex) {
       Throwable cause = ex.getCause();
@@ -166,6 +209,7 @@ public class CachingKeyProvider extends
   @Override
   public Metadata getMetadata(String name) throws IOException {
     try {
+      getExtension().keyMetadataCounter.incrementAndGet();
       return getExtension().keyMetadataCache.get(name);
     } catch (ExecutionException ex) {
       Throwable cause = ex.getCause();
@@ -179,4 +223,27 @@ public class CachingKeyProvider extends
     }
   }
 
+  public MutableStat getKeyVersionCacheStat() {
+    return getExtension().keyVersionCacheStat;
+  }
+
+  public MutableStat getKeyMetadataCacheStat() {
+    return getExtension().keyMetadataCacheStat;
+  }
+
+  public MutableStat getCurrentKeyCacheStat() {
+    return getExtension().currentKeyCacheStat;
+  }
+
+  public int getKeyVersionCacheHit() {
+    return getExtension().keyVersionCounter.get() - getExtension().keyVersionCacheMiss.get();
+  }
+
+  public int getKeyMetadataCacheHit() {
+    return getExtension().keyMetadataCounter.get() - getExtension().keyMetadataCacheMiss.get();
+  }
+
+  public int getCurrentKeyCacheHit() {
+    return getExtension().currentKeyCounter.get() - getExtension().currentKeyCacheMiss.get();
+  }
 }
