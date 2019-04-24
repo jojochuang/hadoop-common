@@ -41,6 +41,7 @@ public class KMSAuditReplayDriver extends Configured implements Tool {
       LoggerFactory.getLogger(KMSAuditReplayDriver.class);
 
   public static final String INPUT_PATH_KEY = "auditreplay.input_path";
+  public static final String START_TIMESTAMP_MS = "start_timestamp_ms";
 
   public static void main(String[] args) throws Exception {
     KMSAuditReplayDriver driver = new KMSAuditReplayDriver();
