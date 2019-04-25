@@ -1,9 +1,14 @@
 package org.apache.hadoop.tools.kmsreplay;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
+import org.apache.commons.codec.binary.Base64;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.crypto.CryptoCodec;
+import org.apache.hadoop.crypto.Encryptor;
 import org.apache.hadoop.crypto.key.KeyProvider;
 import org.apache.hadoop.crypto.key.KeyProviderCryptoExtension;
+import org.apache.hadoop.crypto.key.kms.KMSClientProvider;
 import org.apache.hadoop.hdfs.HdfsKMSUtil;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -11,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
@@ -18,6 +24,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.DelayQueue;
+
+import static org.apache.hadoop.crypto.key.KeyProviderCryptoExtension.EEK;
 
 public class KMSAuditReplayThread extends Thread {
   private static final Logger LOG =
@@ -156,19 +164,29 @@ public class KMSAuditReplayThread extends Thread {
         cachedKeyProvider.deleteKey(command.getKey());
         break;
       case DECRYPT_EEK: {
-        KeyProviderCryptoExtension.EncryptedKeyVersion keyVersion =
+        KeyProviderCryptoExtension.EncryptedKeyVersion encryptedKeyVersion =
             cachedKeyVersion.get(command.getKey());
-        if (keyVersion == null) {
+        if (encryptedKeyVersion == null) {
           // if I don't have a cached keyVersion for this key, generate one and cache it.
           String key = command.getKey();
-          keyVersion = cachedKeyProvider.generateEncryptedKey(key);
-          cachedKeyVersion.put(key, keyVersion);
+          KeyProviderCryptoExtension keyProviderCryptoExtension =
+              KeyProviderCryptoExtension.createKeyProviderCryptoExtension(
+                  new WrappedKeyProvider(cachedKeyProvider));
+          // The WrappedKeyProvider is a hack to force use
+          // DefaultCryptoExtension.generateEncryptedKey() because I don't
+          // want it to talk to KMS which would incur lots of encrypted keys
+          // due to cache.
+          encryptedKeyVersion = keyProviderCryptoExtension.generateEncryptedKey(key);
+
+          cachedKeyVersion.put(key, encryptedKeyVersion);
         }
-        KeyProvider.KeyVersion decryptedKeyVersion = cachedKeyProvider.decryptEncryptedKey(keyVersion);
+        KeyProvider.KeyVersion decryptedKeyVersion =
+            cachedKeyProvider.decryptEncryptedKey(encryptedKeyVersion);
         assert decryptedKeyVersion != null;
       }
         break;
       case GENERATE_EEK:
+        // this would only come from NameNode
         String key = command.getKey();
         cachedKeyVersion.put(key, cachedKeyProvider.generateEncryptedKey(key));
         break;
@@ -242,5 +260,45 @@ public class KMSAuditReplayThread extends Thread {
       context.getCounter(INDIVIDUAL_COMMANDS_COUNTER_GROUP, ent.getKey())
           .increment(ent.getValue().getValue());
     }*/
+  }
+
+  private class WrappedKeyProvider extends KeyProvider {
+    KeyProvider provider;
+    protected WrappedKeyProvider(KeyProvider provider) {
+      super(provider.getConf());
+      this.provider = provider;
+    }
+    @Override public KeyVersion getKeyVersion(String versionName) throws IOException {
+      return provider.getKeyVersion(versionName);
+    }
+
+    @Override public List<String> getKeys() throws IOException {
+      return provider.getKeys();
+    }
+
+    @Override public List<KeyVersion> getKeyVersions(String name) throws IOException {
+      return provider.getKeyVersions(name);
+    }
+
+    @Override public Metadata getMetadata(String name) throws IOException {
+      return provider.getMetadata(name);
+    }
+
+    @Override public KeyVersion createKey(String name, byte[] material, Options options)
+        throws IOException {
+      return provider.createKey(name, material, options);
+    }
+
+    @Override public void deleteKey(String name) throws IOException {
+      provider.deleteKey(name);
+    }
+
+    @Override public KeyVersion rollNewVersion(String name, byte[] material) throws IOException {
+      return provider.rollNewVersion(name, material);
+    }
+
+    @Override public void flush() throws IOException {
+      provider.flush();
+    }
   }
 }
