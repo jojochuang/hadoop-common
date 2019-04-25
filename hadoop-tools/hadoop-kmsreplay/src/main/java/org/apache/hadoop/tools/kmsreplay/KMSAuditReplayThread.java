@@ -1,5 +1,6 @@
 package org.apache.hadoop.tools.kmsreplay;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.crypto.key.KeyProvider;
 import org.apache.hadoop.crypto.key.KeyProviderCryptoExtension;
@@ -12,7 +13,10 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.PrivilegedAction;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.DelayQueue;
 
 public class KMSAuditReplayThread extends Thread {
@@ -29,6 +33,9 @@ public class KMSAuditReplayThread extends Thread {
   private Exception exception;
   private UserGroupInformation loginUser;
 
+  // a cached KeyVersion
+  private Map<String, KeyProviderCryptoExtension.EncryptedKeyVersion> cachedKeyVersion;
+
   KMSAuditReplayThread(Mapper.Context mapperContext, DelayQueue<AuditReplayCommand> commandQueue,
       Map<String, KeyProviderCryptoExtension> keyProviderCache) throws IOException {
     this.mapperContext = mapperContext;
@@ -39,6 +46,8 @@ public class KMSAuditReplayThread extends Thread {
     startTimestampMs = mapperConf.getLong(KMSAuditReplayDriver.START_TIMESTAMP_MS, -1);
 
     loginUser = UserGroupInformation.getLoginUser();
+
+    cachedKeyVersion = new ConcurrentHashMap<>();
   }
 
   /**
@@ -103,7 +112,9 @@ public class KMSAuditReplayThread extends Thread {
    * @return True iff the command was successfully replayed (i.e., no exceptions
    *         were thrown).
    */
-  private boolean replayLog(final AuditReplayCommand command) {
+  @VisibleForTesting
+  boolean replayLog(final AuditReplayCommand command) {
+    LOG.info("replay command: " + command);
     KeyProviderCryptoExtension cachedKeyProvider = keyProviderCache.get(command.getUser());
     if (cachedKeyProvider == null) {
       UserGroupInformation ugi =
@@ -138,23 +149,28 @@ public class KMSAuditReplayThread extends Thread {
       case CREATE_KEY:
         cachedKeyProvider.createKey(command.getKey(), new KeyProvider.Options(mapperConf));
         break;
-      //case GET_KEYS:
-        //break;
+      case GET_KEYS:
+        cachedKeyProvider.getKeys();
+        break;
       case DELETE_KEY:
         cachedKeyProvider.deleteKey(command.getKey());
         break;
-      case DECRYPT_EEK:
-        // TODO: fill gaps
-        String encryptionKeyVersionName = "v1";
-        byte[] encryptedKeyIv = new byte[0];
-        byte[] encryptedKeyMaterial = new byte[0];
-        KeyProviderCryptoExtension.EncryptedKeyVersion
-            ekv = KeyProviderCryptoExtension.EncryptedKeyVersion.createForDecryption(
-                command.getKey(), encryptionKeyVersionName, encryptedKeyIv, encryptedKeyMaterial);
-        cachedKeyProvider.decryptEncryptedKey(ekv);
+      case DECRYPT_EEK: {
+        KeyProviderCryptoExtension.EncryptedKeyVersion keyVersion =
+            cachedKeyVersion.get(command.getKey());
+        if (keyVersion == null) {
+          // if I don't have a cached keyVersion for this key, generate one and cache it.
+          String key = command.getKey();
+          keyVersion = cachedKeyProvider.generateEncryptedKey(key);
+          cachedKeyVersion.put(key, keyVersion);
+        }
+        KeyProvider.KeyVersion decryptedKeyVersion = cachedKeyProvider.decryptEncryptedKey(keyVersion);
+        assert decryptedKeyVersion != null;
+      }
         break;
       case GENERATE_EEK:
-        cachedKeyProvider.generateEncryptedKey(command.getKey());
+        String key = command.getKey();
+        cachedKeyVersion.put(key, cachedKeyProvider.generateEncryptedKey(key));
         break;
       case GET_METADATA:
         cachedKeyProvider.getMetadata(command.getKey());
@@ -165,7 +181,7 @@ public class KMSAuditReplayThread extends Thread {
         cachedKeyProvider.getCurrentKey(command.getKey());
         break;
       case GET_KEY_VERSION:
-        cachedKeyProvider.getKeyVersion(command.getKey());
+        KeyProvider.KeyVersion keyVersion = cachedKeyProvider.getKeyVersion(command.getKey());
         break;
       case GET_KEY_VERSIONS:
         cachedKeyProvider.getKeyVersions(command.getKey());

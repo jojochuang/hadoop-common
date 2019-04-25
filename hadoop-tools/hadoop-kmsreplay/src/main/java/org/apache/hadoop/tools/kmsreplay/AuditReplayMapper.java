@@ -30,9 +30,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -50,12 +53,15 @@ public  class AuditReplayMapper
   private KMSAuditParser commandParser;
   private Map<String, KeyProviderCryptoExtension> keyProviderCache;
   private Function<Long, Long> relativeToAbsoluteTimestamp;
+  private double rateFactor;
 
   private DelayQueue<AuditReplayCommand> commandQueue;
   private ScheduledThreadPoolExecutor progressExecutor;
 
   private static final String NUM_THREADS_KEY = "auditreplay.num-threads";
   private static final int NUM_THREADS_DEFAULT = 1;
+  public static final String RATE_FACTOR_KEY = "auditreplay.rate-factor";
+  public static final double RATE_FACTOR_DEFAULT = 1.0;
 
   // This is the maximum amount that the mapper should read ahead from the input
   // as compared to the replay time. Setting this to one minute avoids reading
@@ -77,15 +83,15 @@ public  class AuditReplayMapper
   }
 
   @Override
-  public void setup(Context context
-  ) throws IOException, InterruptedException {
+  public void setup(Context context) throws IOException, InterruptedException {
     Configuration conf = context.getConfiguration();
 
     startTimestampMs = conf.getLong(KMSAuditReplayDriver.START_TIMESTAMP_MS, -1);
     numThreads = conf.getInt(NUM_THREADS_KEY, NUM_THREADS_DEFAULT);
+    rateFactor = conf.getDouble(RATE_FACTOR_KEY, RATE_FACTOR_DEFAULT);
 
     relativeToAbsoluteTimestamp =
-        (input) -> startTimestampMs + Math.round(input/* / rateFactor*/);
+        (input) -> startTimestampMs + Math.round(input / rateFactor);
 
     LOG.info("Starting " + numThreads + " threads");
 
@@ -106,6 +112,9 @@ public  class AuditReplayMapper
     progressExecutor.scheduleAtFixedRate(context::progress,
         progressFrequencyMs, progressFrequencyMs, TimeUnit.MILLISECONDS);
 
+    commandQueue = new DelayQueue<>();
+    keyProviderCache = new ConcurrentHashMap<>();
+    threads = new ArrayList<>();
     for (int t = 0; t < numThreads; t++) {
       KMSAuditReplayThread thread = new KMSAuditReplayThread(context, commandQueue, keyProviderCache);
       threads.add(thread);
@@ -118,6 +127,10 @@ public  class AuditReplayMapper
       Context context) throws IOException, InterruptedException {
     AuditReplayCommand cmd = commandParser.parse(inputLine,
         relativeToAbsoluteTimestamp);
+    // if the command is unauthenticated, skip
+    if (cmd == null) {
+      return;
+    }
     long delay = cmd.getDelay(TimeUnit.MILLISECONDS);
     // Prevent from loading too many elements into memory all at once
     if (delay > MAX_READAHEAD_MS) {

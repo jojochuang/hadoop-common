@@ -1,21 +1,39 @@
 package org.apache.hadoop.tools.kmsreplay;
 
+import com.google.common.base.Splitter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Text;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.text.DateFormat;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Map;
 import java.util.TimeZone;
 import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class SimpleKMSAuditLogParser implements KMSAuditParser{
+  private static final Logger LOG =
+      LoggerFactory.getLogger(SimpleKMSAuditLogParser.class);
+  // 2019-04-22 00:00:20,949 OK[op=DECRYPT_EEK, key=paypal_emea_key, user=cds_user, accessCount=2082, interval=1122180ms]
   public static final String AUDIT_START_TIMESTAMP_KEY =
       "auditreplay.log-start-time.ms";
-  private long startTimestamp;
 
+  private static final Pattern MESSAGE_ONLY_PATTERN = Pattern
+      .compile("^([0-9-]+ [0-9:,]+) (.+)$");
+  private static final Splitter.MapSplitter AUDIT_SPLITTER = Splitter.on(",")
+      .trimResults().omitEmptyStrings().withKeyValueSeparator("=");
+  private static final Pattern AUDIT_DETAILS_PATTERN =
+      Pattern.compile("^OK\\[(.+)].*$");
   private static final DateFormat AUDIT_DATE_FORMAT = new SimpleDateFormat(
       "yyyy-MM-dd hh:mm:ss,SSS");
+
+  private long startTimestamp;
+
   static {
     AUDIT_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
   }
@@ -32,7 +50,7 @@ public class SimpleKMSAuditLogParser implements KMSAuditParser{
   @Override
   public AuditReplayCommand parse(Text inputLine,
       Function<Long, Long> relativeToAbsolute) throws IOException {
-    /*Matcher m = MESSAGE_ONLY_PATTERN.matcher(inputLine.toString());
+    Matcher m = MESSAGE_ONLY_PATTERN.matcher(inputLine.toString());
     if (!m.find()) {
       throw new IOException(
           "Unable to find valid message pattern from audit log line: "
@@ -46,16 +64,35 @@ public class SimpleKMSAuditLogParser implements KMSAuditParser{
       throw new IOException("Exception while parsing timestamp from audit log",
           p);
     }
-    // We sanitize the = in the rename options field into a : so we can split on
-    // =
-    String auditMessageSanitized = m.group(2).replace("(options=", "(options:");
+
+    String details = m.group(2);
+    Matcher m2 = AUDIT_DETAILS_PATTERN.matcher(details);
+    if (!m2.find()) {
+      LOG.warn("invalid audit log entry: " + details);
+      return null;
+    }
+    String auditMessageSanitized = m2.group(1);
     Map<String, String> parameterMap = AUDIT_SPLITTER
         .split(auditMessageSanitized);
-    return new AuditReplayCommand(relativeToAbsolute.apply(relativeTimestamp),
-        // Split the UGI on space to remove the auth and proxy portions of it
-        SPACE_SPLITTER.split(parameterMap.get("ugi")).iterator().next(),
-        parameterMap.get("cmd").replace("(options:", "(options="),
-        parameterMap.get("src"), parameterMap.get("dst"),
-        parameterMap.get("ip"));*/
+
+    String accessCountString = parameterMap.get("accessCount");
+    int accessCount = 0;
+    if (accessCountString != null) {
+      accessCount = Integer.parseInt(accessCountString);
+    }
+
+    String intervalString = parameterMap.get("interval");
+    int interval = 0;
+    if (intervalString != null ) {
+      interval = Integer.parseInt(intervalString.substring(0, intervalString.length()-2));
+    }
+
+    return new AuditReplayCommand(
+        relativeToAbsolute.apply(relativeTimestamp),
+        parameterMap.get("op"),
+        parameterMap.get("key"),
+        parameterMap.get("user"),
+        accessCount,
+        interval);
   }
 }

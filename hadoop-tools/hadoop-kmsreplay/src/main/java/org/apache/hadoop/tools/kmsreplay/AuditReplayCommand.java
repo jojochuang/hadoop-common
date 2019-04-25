@@ -9,15 +9,17 @@ public class AuditReplayCommand implements Delayed {
   private String ugi;
   private String command;
   private String key;
+  private int accessCount;
+  private int interval;
 
-  AuditReplayCommand(long absoluteTimestamp, String ugi, String command/*,
-      String src, String dest, String sourceIP*/) {
+  AuditReplayCommand(long absoluteTimestamp, String command,
+      String key, String ugi, int accessCount, int interval) {
     this.absoluteTimestamp = absoluteTimestamp;
-    this.ugi = ugi;
     this.command = command;
-    /*this.src = src;
-    this.dest = dest;
-    this.sourceIP = sourceIP;*/
+    this.key = key;
+    this.ugi = ugi;
+    this.accessCount = accessCount;
+    this.interval = interval;
   }
 
   long getAbsoluteTimestamp() {
@@ -56,6 +58,14 @@ public class AuditReplayCommand implements Delayed {
     return key;
   }
 
+  public int getAccessCount() {
+    return accessCount;
+  }
+
+  public int getInterval() {
+    return interval;
+  }
+
   /**
    * A command representing a Poison Pill, indicating that the processing thread
    * should not process any further items and instead should terminate itself.
@@ -65,7 +75,7 @@ public class AuditReplayCommand implements Delayed {
   private static final class PoisonPillCommand extends AuditReplayCommand {
 
     private PoisonPillCommand(long absoluteTimestamp) {
-      super(absoluteTimestamp, null, null/*, null, null, null*/);
+      super(absoluteTimestamp, null, null, null, 0, 0);
     }
 
     @Override
@@ -86,19 +96,19 @@ public class AuditReplayCommand implements Delayed {
     }
     AuditReplayCommand o = (AuditReplayCommand) other;
     return absoluteTimestamp == o.absoluteTimestamp && ugi.equals(o.ugi)
-        && command.equals(o.command) /*&& src.equals(o.src) && dest.equals(o.dest)
-        && sourceIP.equals(o.sourceIP)*/;
+        && command.equals(o.command) && key.equals(o.key) && accessCount == o.accessCount
+        && interval == o.interval;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(absoluteTimestamp, ugi, command/*, src, dest, sourceIP*/);
+    return Objects.hash(absoluteTimestamp, ugi, command, key, accessCount, interval);
   }
 
   @Override
   public String toString() {
     return String.format("AuditReplayCommand(absoluteTimestamp=%d, ugi=%s, "
-            + "command=%s, src=%s, dest=%s, sourceIP=%s",
-        absoluteTimestamp, ugi, command/*, src, dest, sourceIP*/);
+            + "command=%s, key=%s, accessCount=%d, interval=%d",
+        absoluteTimestamp, ugi, command, key, accessCount, interval);
   }
 }
