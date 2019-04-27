@@ -1,31 +1,41 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.hadoop.tools.kmsreplay;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
-import org.apache.commons.codec.binary.Base64;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.crypto.CryptoCodec;
-import org.apache.hadoop.crypto.Encryptor;
 import org.apache.hadoop.crypto.key.KeyProvider;
 import org.apache.hadoop.crypto.key.KeyProviderCryptoExtension;
-import org.apache.hadoop.crypto.key.kms.KMSClientProvider;
+import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.hdfs.HdfsKMSUtil;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.util.KMSUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.PrivilegedAction;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.DelayQueue;
-
-import static org.apache.hadoop.crypto.key.KeyProviderCryptoExtension.EEK;
 
 public class KMSAuditReplayThread extends Thread {
   private static final Logger LOG =
@@ -45,7 +55,8 @@ public class KMSAuditReplayThread extends Thread {
   private Map<String, KeyProviderCryptoExtension.EncryptedKeyVersion> cachedKeyVersion;
 
   KMSAuditReplayThread(Mapper.Context mapperContext, DelayQueue<AuditReplayCommand> commandQueue,
-      Map<String, KeyProviderCryptoExtension> keyProviderCache) throws IOException {
+      Map<String, KeyProviderCryptoExtension> keyProviderCache,
+      Map<String, KeyProviderCryptoExtension.EncryptedKeyVersion> cachedKeyVersion) throws IOException {
     this.mapperContext = mapperContext;
     this.commandQueue = commandQueue;
     this.keyProviderCache = keyProviderCache;
@@ -54,8 +65,12 @@ public class KMSAuditReplayThread extends Thread {
     startTimestampMs = mapperConf.getLong(KMSAuditReplayDriver.START_TIMESTAMP_MS, -1);
 
     loginUser = UserGroupInformation.getLoginUser();
+    this.cachedKeyVersion = cachedKeyVersion;
+  }
 
-    cachedKeyVersion = new ConcurrentHashMap<>();
+  @VisibleForTesting
+  void addCachedKeyVersionForTest(String key, KeyProviderCryptoExtension.EncryptedKeyVersion encryptedKeyVersion) {
+    cachedKeyVersion.put(key, encryptedKeyVersion);
   }
 
   /**
@@ -125,16 +140,19 @@ public class KMSAuditReplayThread extends Thread {
     LOG.info("replay command: " + command);
     KeyProviderCryptoExtension cachedKeyProvider = keyProviderCache.get(command.getUser());
     if (cachedKeyProvider == null) {
+      LOG.info("KeyProvider for user " + command.getUser() + " doesn't exist yet. Create one ");
       UserGroupInformation ugi =
           UserGroupInformation.createProxyUser(command.getUser(), loginUser);
       cachedKeyProvider = ugi.doAs((PrivilegedAction<KeyProviderCryptoExtension>) () -> {
         KeyProvider keyProvider = null;
         try {
-          keyProvider = HdfsKMSUtil.createKeyProvider(mapperConf);
+          keyProvider = KMSUtil.createKeyProvider(mapperConf,
+              CommonConfigurationKeysPublic.HADOOP_SECURITY_KEY_PROVIDER_PATH);
         } catch (IOException ioe) {
           throw new RuntimeException(ioe);
         }
         if (keyProvider == null) {
+          LOG.warn("unable to create a key provider");
           return null;
         }
         return KeyProviderCryptoExtension.createKeyProviderCryptoExtension(keyProvider);
@@ -150,6 +168,8 @@ public class KMSAuditReplayThread extends Thread {
       //replayCountersMap.get(REPLAYCOUNTERS.TOTALUNSUPPORTEDCOMMANDS).increment(1);
       return false;
     }
+
+    LOG.info("replay command = " + replayCommand.toString());
 
     try {
       long startTime = System.currentTimeMillis();
@@ -167,8 +187,11 @@ public class KMSAuditReplayThread extends Thread {
         KeyProviderCryptoExtension.EncryptedKeyVersion encryptedKeyVersion =
             cachedKeyVersion.get(command.getKey());
         if (encryptedKeyVersion == null) {
+          // no, doesn't work. The EncryptionKey created locally isn't compatible
+          // with the one from KeyTrustee
+
           // if I don't have a cached keyVersion for this key, generate one and cache it.
-          String key = command.getKey();
+          /*String key = command.getKey();
           KeyProviderCryptoExtension keyProviderCryptoExtension =
               KeyProviderCryptoExtension.createKeyProviderCryptoExtension(
                   new WrappedKeyProvider(cachedKeyProvider));
@@ -178,7 +201,17 @@ public class KMSAuditReplayThread extends Thread {
           // due to cache.
           encryptedKeyVersion = keyProviderCryptoExtension.generateEncryptedKey(key);
 
+          */
+          // temporay work around. acquire a EEK from KMS
+          // note this is not the best repro, because this call also acquires 150 EEK at once, cached.
+          String key = command.getKey();
+          encryptedKeyVersion = cachedKeyProvider.generateEncryptedKey(key);
+          LOG.info("created locally an eek and send to KMS to decrypt: " +
+              encryptedKeyVersion.getEncryptionKeyName() + "@" + encryptedKeyVersion.getEncryptionKeyVersionName());
           cachedKeyVersion.put(key, encryptedKeyVersion);
+        } else{
+          LOG.info("reuse existing eek for key " + command.getKey() + ":" +
+              encryptedKeyVersion.getEncryptionKeyName() + "@" + encryptedKeyVersion.getEncryptedKeyVersion());
         }
         KeyProvider.KeyVersion decryptedKeyVersion =
             cachedKeyProvider.decryptEncryptedKey(encryptedKeyVersion);
@@ -188,7 +221,10 @@ public class KMSAuditReplayThread extends Thread {
       case GENERATE_EEK:
         // this would only come from NameNode
         String key = command.getKey();
-        cachedKeyVersion.put(key, cachedKeyProvider.generateEncryptedKey(key));
+        KeyProviderCryptoExtension.EncryptedKeyVersion encryptedKeyVersion =
+            cachedKeyProvider.generateEncryptedKey(key);
+        LOG.info("generated eek: " + encryptedKeyVersion.getEncryptionKeyName() + "@" + encryptedKeyVersion.getEncryptionKeyVersionName());
+        cachedKeyVersion.put(key, encryptedKeyVersion);
         break;
       case GET_METADATA:
         cachedKeyProvider.getMetadata(command.getKey());

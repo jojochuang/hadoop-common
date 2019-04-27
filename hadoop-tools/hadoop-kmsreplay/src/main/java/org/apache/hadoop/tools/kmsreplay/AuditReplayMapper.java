@@ -24,7 +24,6 @@ import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.MRJobConfig;
 import org.apache.hadoop.mapreduce.Mapper;
-import org.apache.hadoop.security.UserGroupInformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,11 +34,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+
+import static org.apache.hadoop.tools.kmsreplay.KMSAuditReplayDriver.EDEK_DUMP_PATH_KEY;
 
 public  class AuditReplayMapper
     extends Mapper<LongWritable, Text, NullWritable, NullWritable> {
@@ -52,6 +52,7 @@ public  class AuditReplayMapper
   private long highestTimestamp;
   private KMSAuditParser commandParser;
   private Map<String, KeyProviderCryptoExtension> keyProviderCache;
+  private Map<String, KeyProviderCryptoExtension.EncryptedKeyVersion> cachedKeyVersion;
   private Function<Long, Long> relativeToAbsoluteTimestamp;
   private double rateFactor;
 
@@ -112,11 +113,23 @@ public  class AuditReplayMapper
     progressExecutor.scheduleAtFixedRate(context::progress,
         progressFrequencyMs, progressFrequencyMs, TimeUnit.MILLISECONDS);
 
+    try {
+      String edekDumpFileName = conf.get(EDEK_DUMP_PATH_KEY, "");
+      if (edekDumpFileName.isEmpty()) {
+        LOG.info("Skip loading EDEK because file name was not given");
+      } else {
+        cachedKeyVersion = KMSAuditLogPreprocessor.loadEDEK(conf, edekDumpFileName);
+      }
+    } catch (ClassNotFoundException e) {
+      e.printStackTrace();
+    }
+
     commandQueue = new DelayQueue<>();
     keyProviderCache = new ConcurrentHashMap<>();
+
     threads = new ArrayList<>();
     for (int t = 0; t < numThreads; t++) {
-      KMSAuditReplayThread thread = new KMSAuditReplayThread(context, commandQueue, keyProviderCache);
+      KMSAuditReplayThread thread = new KMSAuditReplayThread(context, commandQueue, keyProviderCache, cachedKeyVersion);
       threads.add(thread);
       thread.start();
     }

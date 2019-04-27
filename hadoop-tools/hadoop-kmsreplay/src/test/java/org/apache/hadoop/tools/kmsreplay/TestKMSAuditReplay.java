@@ -17,6 +17,9 @@ import java.net.URI;
 import java.security.PrivilegedExceptionAction;
 import java.util.UUID;
 
+import static org.apache.hadoop.tools.kmsreplay.KMSAuditLogPreprocessor.DEFAULT_EDEK_DUMP_FILE;
+import static org.apache.hadoop.tools.kmsreplay.KMSAuditReplayDriver.EDEK_DUMP_PATH_KEY;
+import static org.apache.hadoop.tools.kmsreplay.KMSAuditReplayDriver.INPUT_PATH_KEY;
 import static org.junit.Assert.*;
 
 public class TestKMSAuditReplay extends TestKMS {
@@ -37,6 +40,7 @@ public class TestKMSAuditReplay extends TestKMS {
 
     KMSCallable<Integer> callable = new KMSCallable<Integer>() {
       @Override public Integer call() throws Exception {
+        // TODO: set up encryption keys beforehand
         JobConf conf = new JobConf();
         final URI uri = createKMSUri(getKMSUrl());
         conf.set(CommonConfigurationKeysPublic.HADOOP_SECURITY_KEY_PROVIDER_PATH, uri.toString());
@@ -48,7 +52,8 @@ public class TestKMSAuditReplay extends TestKMS {
 
         conf.set("mapreduce.framework.name", "local");
         conf.setLong("auditreplay.log-start-time.ms", 0);//1555891200000);
-        conf.set("auditreplay.input_path", KMS_AUDIT_LOG_DIR);
+        conf.set(INPUT_PATH_KEY, KMS_AUDIT_LOG_DIR);
+        //conf.set(EDEK_DUMP_PATH_KEY, "target/test-classes/" + DEFAULT_EDEK_DUMP_FILE);
 
         KMSAuditReplayDriver driver = new KMSAuditReplayDriver();
 

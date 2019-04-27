@@ -41,6 +41,7 @@ public class KMSAuditReplayDriver extends Configured implements Tool {
       LoggerFactory.getLogger(KMSAuditReplayDriver.class);
 
   public static final String INPUT_PATH_KEY = "auditreplay.input_path";
+  public static final String EDEK_DUMP_PATH_KEY = "edek_dump.input_path";
   public static final String START_TIMESTAMP_MS = "start_timestamp_ms";
 
   public static void main(String[] args) throws Exception {
@@ -67,10 +68,10 @@ public class KMSAuditReplayDriver extends Configured implements Tool {
       throws IOException, ClassNotFoundException, InstantiationException,
       IllegalAccessException {
     Configuration conf = new Configuration(baseConf);
-    //conf.set(NN_URI, nnURI);
     conf.setBoolean(MRJobConfig.MAP_SPECULATIVE, false);
     LOG.info("input path = " + conf.get(INPUT_PATH_KEY));
-    Class<? extends AuditReplayMapper> mapperClass = org.apache.hadoop.tools.kmsreplay.AuditReplayMapper.class;
+    Class<? extends AuditReplayMapper> mapperClass =
+        org.apache.hadoop.tools.kmsreplay.AuditReplayMapper.class;
 
     /*String startTimeString = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss z")
         .format(new Date(startTimestampMs));
@@ -78,7 +79,7 @@ public class KMSAuditReplayDriver extends Configured implements Tool {
         + startTimeString + ")");
     conf.setLong(START_TIMESTAMP_MS, startTimestampMs);*/
 
-    Job job = Job.getInstance(conf, "Dynamometer Workload Driver");
+    Job job = Job.getInstance(conf, "KMS-o-meter Workload Driver");
     job.setOutputFormatClass(NullOutputFormat.class);
     job.setJarByClass(mapperClass);
     job.setMapperClass(mapperClass);
