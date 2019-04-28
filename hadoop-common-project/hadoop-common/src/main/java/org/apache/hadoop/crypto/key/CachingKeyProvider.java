@@ -63,9 +63,6 @@ public class CachingKeyProvider extends
     MutableStat currentKeyCacheStat =
         registry.newStat("CurrentKey", "Current Key Cache Stat", "Ops",
             "latency", false);
-    //stat.add(1000);
-    //MetricsRecordBuilder rb;
-    //registry.snapshot(rb, false);
 
     CacheExtension(KeyProvider prov, long keyTimeoutMillis,
         long currKeyTimeoutMillis) {
