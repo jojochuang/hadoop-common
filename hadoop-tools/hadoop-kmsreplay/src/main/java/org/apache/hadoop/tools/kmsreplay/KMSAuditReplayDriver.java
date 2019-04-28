@@ -17,6 +17,9 @@
  */
 package org.apache.hadoop.tools.kmsreplay;
 
+import io.jaegertracing.internal.JaegerTracer;
+import io.opentracing.propagation.Format;
+import io.opentracing.util.GlobalTracer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileStatus;
@@ -25,6 +28,7 @@ import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.MRJobConfig;
+import org.apache.hadoop.mapreduce.filecache.DistributedCache;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.NullOutputFormat;
@@ -64,6 +68,14 @@ public class KMSAuditReplayDriver extends Configured implements Tool {
 
   }
 
+  /**
+   * The format to save the context as text.
+   * <p>
+   * Using the mutable StringBuilder instead of plain String.
+   */
+  public static final class StringFormat implements Format<StringBuilder> {
+  }
+
   private Job getJobForSubmission(Configuration baseConf)
       throws IOException, ClassNotFoundException, InstantiationException,
       IllegalAccessException {
@@ -90,6 +102,8 @@ public class KMSAuditReplayDriver extends Configured implements Tool {
     job.setMapOutputValueClass(NullWritable.class);
     job.setOutputKeyClass(NullWritable.class);
     job.setOutputValueClass(NullWritable.class);
+
+    //DistributedCache.addFileToClassPath(TestMRJobs.APP_JAR, conf);
 
     return job;
   }

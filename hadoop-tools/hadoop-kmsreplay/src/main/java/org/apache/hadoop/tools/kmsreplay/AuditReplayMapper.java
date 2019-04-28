@@ -85,7 +85,10 @@ public  class AuditReplayMapper
 
   @Override
   public void setup(Context context) throws IOException, InterruptedException {
+
     Configuration conf = context.getConfiguration();
+
+    TracerUtil.initTracing(conf, "kms-o-meter");
 
     startTimestampMs = conf.getLong(KMSAuditReplayDriver.START_TIMESTAMP_MS, -1);
     numThreads = conf.getInt(NUM_THREADS_KEY, NUM_THREADS_DEFAULT);

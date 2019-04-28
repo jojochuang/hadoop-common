@@ -18,6 +18,8 @@
 package org.apache.hadoop.tools.kmsreplay;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.opentracing.Scope;
+import io.opentracing.util.GlobalTracer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.crypto.key.KeyProvider;
 import org.apache.hadoop.crypto.key.KeyProviderCryptoExtension;
@@ -97,7 +99,7 @@ public class KMSAuditReplayThread extends Thread {
   public void run() {
     long currentEpoch = System.currentTimeMillis();
     long delay = startTimestampMs - currentEpoch;
-    try {
+    try (Scope scope = GlobalTracer.get().buildSpan("main").startActive(true)) {
       if (delay > 0) {
         LOG.info("Sleeping for " + delay + " ms");
         Thread.sleep(delay);
@@ -169,9 +171,10 @@ public class KMSAuditReplayThread extends Thread {
       return false;
     }
 
-    LOG.info("replay command = " + replayCommand.toString());
-
-    try {
+    try (Scope scope = GlobalTracer.get().buildSpan("replayLog").startActive(true)) {
+      scope.span().setTag("command", replayCommand.toString());
+      scope.span().setTag("key", command.getKey());
+      scope.span().setTag("user", command.getUser());
       long startTime = System.currentTimeMillis();
       switch (replayCommand) {
       case CREATE_KEY:
@@ -187,43 +190,42 @@ public class KMSAuditReplayThread extends Thread {
         KeyProviderCryptoExtension.EncryptedKeyVersion encryptedKeyVersion =
             cachedKeyVersion.get(command.getKey());
         if (encryptedKeyVersion == null) {
-          // no, doesn't work. The EncryptionKey created locally isn't compatible
-          // with the one from KeyTrustee
-
-          // if I don't have a cached keyVersion for this key, generate one and cache it.
-          /*String key = command.getKey();
-          KeyProviderCryptoExtension keyProviderCryptoExtension =
-              KeyProviderCryptoExtension.createKeyProviderCryptoExtension(
-                  new WrappedKeyProvider(cachedKeyProvider));
-          // The WrappedKeyProvider is a hack to force use
-          // DefaultCryptoExtension.generateEncryptedKey() because I don't
-          // want it to talk to KMS which would incur lots of encrypted keys
-          // due to cache.
-          encryptedKeyVersion = keyProviderCryptoExtension.generateEncryptedKey(key);
-
-          */
-          // temporay work around. acquire a EEK from KMS
-          // note this is not the best repro, because this call also acquires 150 EEK at once, cached.
           String key = command.getKey();
           encryptedKeyVersion = cachedKeyProvider.generateEncryptedKey(key);
-          LOG.info("created locally an eek and send to KMS to decrypt: " +
-              encryptedKeyVersion.getEncryptionKeyName() + "@" + encryptedKeyVersion.getEncryptionKeyVersionName());
+          LOG.debug("created locally an eek and send to KMS to decrypt: " + key + "@" +
+              encryptedKeyVersion.getEncryptionKeyVersionName());
           cachedKeyVersion.put(key, encryptedKeyVersion);
         } else{
-          LOG.info("reuse existing eek for key " + command.getKey() + ":" +
-              encryptedKeyVersion.getEncryptionKeyName() + "@" + encryptedKeyVersion.getEncryptedKeyVersion());
+          LOG.debug("reuse existing eek for key " + command.getKey());
         }
         KeyProvider.KeyVersion decryptedKeyVersion =
             cachedKeyProvider.decryptEncryptedKey(encryptedKeyVersion);
+
+        long endTime = System.currentTimeMillis();
+        if (endTime - startTime > 1000) {
+          LOG.warn("DECRYPT_EEK " + command.getKey() + " took " + (endTime - startTime) + " ms.");
+        }
         assert decryptedKeyVersion != null;
       }
         break;
       case GENERATE_EEK:
         // this would only come from NameNode
+
+        // TODO: note KMS has an internal EDEK cache (within KMSClientProvider).
+        // but the GENERATE_EEK in  kms audit log are what actually hits KMS, which generates 150 EDEK at once.
+        // So we should invalidate the internal cache so that each GENERATE_EEK request does hit KMS.
+
+        // cachedKeyProvider.drain(command.getKey());
+
         String key = command.getKey();
         KeyProviderCryptoExtension.EncryptedKeyVersion encryptedKeyVersion =
             cachedKeyProvider.generateEncryptedKey(key);
-        LOG.info("generated eek: " + encryptedKeyVersion.getEncryptionKeyName() + "@" + encryptedKeyVersion.getEncryptionKeyVersionName());
+        long endTime = System.currentTimeMillis();
+        if (endTime - startTime > 1000) {
+          LOG.warn("GENERATE_EEK " + command.getKey() + " took " + (endTime - startTime) + " ms.");
+        }
+        LOG.debug("generated eek for key " + encryptedKeyVersion.getEncryptionKeyName() + "@" +
+            encryptedKeyVersion.getEncryptionKeyVersionName());
         cachedKeyVersion.put(key, encryptedKeyVersion);
         break;
       case GET_METADATA:

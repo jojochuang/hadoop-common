@@ -64,7 +64,8 @@ public class TestKMSAuditReplayThread {
 
     Map<String, KeyProviderCryptoExtension.EncryptedKeyVersion> cachedKeyVersion =
         new ConcurrentHashMap<>();
-    KMSAuditReplayThread thread = new KMSAuditReplayThread(context, commandQueue, keyProviderCache, cachedKeyVersion);
+    KMSAuditReplayThread thread =
+        new KMSAuditReplayThread(context, commandQueue, keyProviderCache, cachedKeyVersion);
     AuditReplayCommand command = new AuditReplayCommand(0, "GENERATE_EEK", "key1", "foo", 1, 0);
 
     KeyProviderCryptoExtension kpce = mock(KeyProviderCryptoExtension.class);
