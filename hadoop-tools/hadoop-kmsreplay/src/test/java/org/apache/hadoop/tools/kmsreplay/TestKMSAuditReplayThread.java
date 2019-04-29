@@ -14,6 +14,7 @@ import java.security.GeneralSecurityException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.DelayQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
@@ -39,7 +40,10 @@ public class TestKMSAuditReplayThread {
 
     Map<String, KeyProviderCryptoExtension.EncryptedKeyVersion> cachedKeyVersion =
         new ConcurrentHashMap<>();
-    KMSAuditReplayThread thread = new KMSAuditReplayThread(context, commandQueue, keyProviderCache, cachedKeyVersion);
+    AtomicInteger totalAuditCounter = new AtomicInteger();
+    AtomicInteger auditReplayCounter = new AtomicInteger();
+    KMSAuditReplayThread thread = new KMSAuditReplayThread(context, commandQueue, keyProviderCache,
+        cachedKeyVersion, totalAuditCounter, auditReplayCounter);
     AuditReplayCommand command = new AuditReplayCommand(0, "DECRYPT_EEK", "key1", "foo", 1, 0);
 
     KeyProviderCryptoExtension kpce = mock(KeyProviderCryptoExtension.class);
@@ -64,8 +68,11 @@ public class TestKMSAuditReplayThread {
 
     Map<String, KeyProviderCryptoExtension.EncryptedKeyVersion> cachedKeyVersion =
         new ConcurrentHashMap<>();
+    AtomicInteger totalAuditCounter = new AtomicInteger();
+    AtomicInteger auditReplayCounter = new AtomicInteger();
     KMSAuditReplayThread thread =
-        new KMSAuditReplayThread(context, commandQueue, keyProviderCache, cachedKeyVersion);
+        new KMSAuditReplayThread(context, commandQueue, keyProviderCache, cachedKeyVersion,
+            totalAuditCounter, auditReplayCounter);
     AuditReplayCommand command = new AuditReplayCommand(0, "GENERATE_EEK", "key1", "foo", 1, 0);
 
     KeyProviderCryptoExtension kpce = mock(KeyProviderCryptoExtension.class);

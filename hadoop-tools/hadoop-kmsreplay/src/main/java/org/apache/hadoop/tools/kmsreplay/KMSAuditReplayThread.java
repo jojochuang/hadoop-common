@@ -34,10 +34,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.PrivilegedAction;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.DelayQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class KMSAuditReplayThread extends Thread {
   private static final Logger LOG =
@@ -45,7 +44,9 @@ public class KMSAuditReplayThread extends Thread {
 
   private Mapper.Context mapperContext;
   private DelayQueue<AuditReplayCommand> commandQueue;
-  Map<String, KeyProviderCryptoExtension> keyProviderCache;
+  private Map<String, KeyProviderCryptoExtension> keyProviderCache;
+  private AtomicInteger totalAuditCounter;
+  private AtomicInteger auditReplayCounter;
 
   private long startTimestampMs;
   private Configuration mapperConf;
@@ -58,10 +59,13 @@ public class KMSAuditReplayThread extends Thread {
 
   KMSAuditReplayThread(Mapper.Context mapperContext, DelayQueue<AuditReplayCommand> commandQueue,
       Map<String, KeyProviderCryptoExtension> keyProviderCache,
-      Map<String, KeyProviderCryptoExtension.EncryptedKeyVersion> cachedKeyVersion) throws IOException {
+      Map<String, KeyProviderCryptoExtension.EncryptedKeyVersion> cachedKeyVersion,
+      AtomicInteger totalAuditCounter, AtomicInteger auditReplayCounter) throws IOException {
     this.mapperContext = mapperContext;
     this.commandQueue = commandQueue;
     this.keyProviderCache = keyProviderCache;
+    this.totalAuditCounter = totalAuditCounter;
+    this.auditReplayCounter = auditReplayCounter;
 
     mapperConf = mapperContext.getConfiguration();
     startTimestampMs = mapperConf.getLong(KMSAuditReplayDriver.START_TIMESTAMP_MS, -1);
@@ -280,7 +284,16 @@ public class KMSAuditReplayThread extends Thread {
     } catch (GeneralSecurityException e) {
       LOG.warn("GeneralSecurityException: " + e.getLocalizedMessage());
       return false;
+    } finally {
+      int replayed = auditReplayCounter.incrementAndGet();
+      double percentReplayed = 100.0 * replayed / totalAuditCounter.get();
+      mapperContext.setStatus( percentReplayed + "%/" + replayed + " replayed");
+      if (replayed % 100 == 0) {
+        LOG.info("Replayed " + replayed + " audits. Percent: " + percentReplayed + "%");
+      }
     }
+
+
   }
 
   /**
@@ -298,45 +311,5 @@ public class KMSAuditReplayThread extends Thread {
       context.getCounter(INDIVIDUAL_COMMANDS_COUNTER_GROUP, ent.getKey())
           .increment(ent.getValue().getValue());
     }*/
-  }
-
-  private class WrappedKeyProvider extends KeyProvider {
-    KeyProvider provider;
-    protected WrappedKeyProvider(KeyProvider provider) {
-      super(provider.getConf());
-      this.provider = provider;
-    }
-    @Override public KeyVersion getKeyVersion(String versionName) throws IOException {
-      return provider.getKeyVersion(versionName);
-    }
-
-    @Override public List<String> getKeys() throws IOException {
-      return provider.getKeys();
-    }
-
-    @Override public List<KeyVersion> getKeyVersions(String name) throws IOException {
-      return provider.getKeyVersions(name);
-    }
-
-    @Override public Metadata getMetadata(String name) throws IOException {
-      return provider.getMetadata(name);
-    }
-
-    @Override public KeyVersion createKey(String name, byte[] material, Options options)
-        throws IOException {
-      return provider.createKey(name, material, options);
-    }
-
-    @Override public void deleteKey(String name) throws IOException {
-      provider.deleteKey(name);
-    }
-
-    @Override public KeyVersion rollNewVersion(String name, byte[] material) throws IOException {
-      return provider.rollNewVersion(name, material);
-    }
-
-    @Override public void flush() throws IOException {
-      provider.flush();
-    }
   }
 }

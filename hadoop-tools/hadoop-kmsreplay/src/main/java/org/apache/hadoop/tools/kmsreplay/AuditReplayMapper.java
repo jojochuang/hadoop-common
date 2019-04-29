@@ -37,6 +37,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import static org.apache.hadoop.tools.kmsreplay.KMSAuditReplayDriver.EDEK_DUMP_PATH_KEY;
@@ -73,6 +74,9 @@ public  class AuditReplayMapper
 
   public static final String COMMAND_PARSER_KEY =
       "auditreplay.command-parser.class";
+
+  public AtomicInteger totalAuditCounter = new AtomicInteger();
+  public AtomicInteger auditReplayCounter  = new AtomicInteger();
   public static final Class<SimpleKMSAuditLogParser> COMMAND_PARSER_DEFAULT =
       SimpleKMSAuditLogParser.class;
 
@@ -132,7 +136,8 @@ public  class AuditReplayMapper
 
     threads = new ArrayList<>();
     for (int t = 0; t < numThreads; t++) {
-      KMSAuditReplayThread thread = new KMSAuditReplayThread(context, commandQueue, keyProviderCache, cachedKeyVersion);
+      KMSAuditReplayThread thread = new KMSAuditReplayThread(context,
+          commandQueue, keyProviderCache, cachedKeyVersion, totalAuditCounter, auditReplayCounter);
       threads.add(thread);
       thread.start();
     }
@@ -154,6 +159,10 @@ public  class AuditReplayMapper
     }
     commandQueue.put(cmd);
     highestTimestamp = cmd.getAbsoluteTimestamp();
+
+    int currentTotal = totalAuditCounter.incrementAndGet();
+    context.setStatus("Loaded audit log time stamp " + highestTimestamp + ". " +
+        currentTotal + " audit log loaded.");
   }
 
   @Override

@@ -334,6 +334,11 @@
       <artifactId>dnsjava</artifactId>
       <scope>compile</scope>
     </dependency>
+    <dependency>
+      <groupId>io.jaegertracing</groupId>
+      <artifactId>jaeger-core</artifactId>
+      <version>0.33.1</version>
+    </dependency>
   </dependencies>
 
   <build>
