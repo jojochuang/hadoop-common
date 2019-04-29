@@ -319,7 +319,7 @@ public class KMSAuditLogPreprocessor extends Configured implements Tool {
 
     if (edekDumpFileName.isEmpty()) {
       LOG.info("Skip loading EDEK because file name was not given");
-      return null;
+      return cachedKeyVersion;
     }
     LOG.info("Loading EDEK from dump file " + edekDumpFileName);
 

@@ -215,22 +215,27 @@ public class KMSAuditReplayThread extends Thread {
       case GENERATE_EEK:
         // this would only come from NameNode
 
-        // TODO: note KMS has an internal EDEK cache (within KMSClientProvider).
-        // but the GENERATE_EEK in  kms audit log are what actually hits KMS, which generates 150 EDEK at once.
-        // So we should invalidate the internal cache so that each GENERATE_EEK request does hit KMS.
-
-        // cachedKeyProvider.drain(command.getKey());
-
         String key = command.getKey();
-        KeyProviderCryptoExtension.EncryptedKeyVersion encryptedKeyVersion =
-            cachedKeyProvider.generateEncryptedKey(key);
+        KeyProviderCryptoExtension.EncryptedKeyVersion encryptedKeyVersion = null;
+        try (Scope scopeGenerate = GlobalTracer.get().buildSpan("generateEncryptedKey").startActive(true)) {
+
+          for (int i=0; i< 150; i++) {
+            encryptedKeyVersion = cachedKeyProvider.generateEncryptedKey(key);
+          }
+        }
         long endTime = System.currentTimeMillis();
         if (endTime - startTime > 1000) {
           LOG.warn("GENERATE_EEK " + command.getKey() + " took " + (endTime - startTime) + " ms.");
         }
-        LOG.debug("generated eek for key " + encryptedKeyVersion.getEncryptionKeyName() + "@" +
-            encryptedKeyVersion.getEncryptionKeyVersionName());
         cachedKeyVersion.put(key, encryptedKeyVersion);
+
+        // Note KMS has an internal EDEK cache (within KMSClientProvider).
+        // but the GENERATE_EEK in  kms audit log are what actually hits KMS, which generates 150 EDEK at once.
+        // So we should invalidate the internal cache to make sure each GENERATE_EEK request hits KMS.
+
+        /*try (Scope scopeDrain = GlobalTracer.get().buildSpan("drain").startActive(true)) {
+          cachedKeyProvider.drain(command.getKey());
+        }*/
         break;
       case GET_METADATA:
         cachedKeyProvider.getMetadata(command.getKey());

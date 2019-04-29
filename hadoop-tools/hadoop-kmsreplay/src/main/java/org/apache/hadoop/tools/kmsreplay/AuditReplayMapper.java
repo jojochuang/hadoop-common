@@ -122,11 +122,7 @@ public  class AuditReplayMapper
 
     try {
       String edekDumpFileName = conf.get(EDEK_DUMP_PATH_KEY, "");
-      if (edekDumpFileName.isEmpty()) {
-        LOG.info("Skip loading EDEK because file name was not given");
-      } else {
-        cachedKeyVersion = KMSAuditLogPreprocessor.loadEDEK(conf, edekDumpFileName);
-      }
+      cachedKeyVersion = KMSAuditLogPreprocessor.loadEDEK(conf, edekDumpFileName);
     } catch (ClassNotFoundException e) {
       e.printStackTrace();
     }
