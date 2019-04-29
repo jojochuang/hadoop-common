@@ -26,6 +26,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import io.opentracing.Scope;
+import io.opentracing.util.GlobalTracer;
 import org.apache.hadoop.metrics2.lib.MetricsRegistry;
 import org.apache.hadoop.metrics2.lib.MutableStat;
 import org.apache.hadoop.util.Time;
@@ -74,16 +76,19 @@ public class CachingKeyProvider extends
                 @Override
                 public KeyVersion load(String key) throws Exception {
 
-                  final long startTime = Time.monotonicNow();
-                  KeyVersion kv = provider.getKeyVersion(key);
-                  if (kv == null) {
-                    throw new KeyNotFoundException();
-                  }
-                  final long endTime = Time.monotonicNow();
+                  try (Scope scope = GlobalTracer.get().buildSpan("load KeyVersionCache").
+                      startActive(true)) {
+                    final long startTime = Time.monotonicNow();
+                    KeyVersion kv = provider.getKeyVersion(key);
+                    if (kv == null) {
+                      throw new KeyNotFoundException();
+                    }
+                    final long endTime = Time.monotonicNow();
 
-                  keyVersionCacheStat.add(endTime - startTime);
-                  keyVersionCacheMiss.incrementAndGet();
-                  return kv;
+                    keyVersionCacheStat.add(endTime - startTime);
+                    keyVersionCacheMiss.incrementAndGet();
+                    return kv;
+                  }
                 }
               });
       keyMetadataCache =
@@ -92,15 +97,18 @@ public class CachingKeyProvider extends
               .build(new CacheLoader<String, Metadata>() {
                 @Override
                 public Metadata load(String key) throws Exception {
-                  final long startTime = Time.monotonicNow();
-                  Metadata meta = provider.getMetadata(key);
-                  if (meta == null) {
-                    throw new KeyNotFoundException();
+                  try (Scope scope = GlobalTracer.get().buildSpan("load KeyMetadataCache").
+                      startActive(true)) {
+                    final long startTime = Time.monotonicNow();
+                    Metadata meta = provider.getMetadata(key);
+                    if (meta == null) {
+                      throw new KeyNotFoundException();
+                    }
+                    final long endTime = Time.monotonicNow();
+                    keyMetadataCacheStat.add(endTime - startTime);
+                    keyMetadataCacheMiss.incrementAndGet();
+                    return meta;
                   }
-                  final long endTime = Time.monotonicNow();
-                  keyMetadataCacheStat.add(endTime - startTime);
-                  keyMetadataCacheMiss.incrementAndGet();
-                  return meta;
                 }
               });
       currentKeyCache =
@@ -109,15 +117,18 @@ public class CachingKeyProvider extends
           .build(new CacheLoader<String, KeyVersion>() {
             @Override
             public KeyVersion load(String key) throws Exception {
-              final long startTime = Time.monotonicNow();
-              KeyVersion kv = provider.getCurrentKey(key);
-              if (kv == null) {
-                throw new KeyNotFoundException();
+              try (Scope scope = GlobalTracer.get().buildSpan("load CurrentKeyCache").
+                  startActive(true)) {
+                final long startTime = Time.monotonicNow();
+                KeyVersion kv = provider.getCurrentKey(key);
+                if (kv == null) {
+                  throw new KeyNotFoundException();
+                }
+                final long endTime = Time.monotonicNow();
+                currentKeyCacheStat.add(endTime - startTime);
+                currentKeyCacheMiss.incrementAndGet();
+                return kv;
               }
-              final long endTime = Time.monotonicNow();
-              currentKeyCacheStat.add(endTime - startTime);
-              currentKeyCacheMiss.incrementAndGet();
-              return kv;
             }
           });
     }

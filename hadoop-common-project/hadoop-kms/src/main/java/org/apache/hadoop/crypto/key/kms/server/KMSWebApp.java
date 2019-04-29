@@ -28,6 +28,7 @@ import org.apache.hadoop.crypto.key.CachingKeyProvider;
 import org.apache.hadoop.crypto.key.KeyProvider;
 import org.apache.hadoop.crypto.key.KeyProviderCryptoExtension;
 import org.apache.hadoop.crypto.key.KeyProviderFactory;
+import org.apache.hadoop.crypto.key.TracerUtil;
 import org.apache.hadoop.http.HttpServer2;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.authorize.AccessControlList;
@@ -151,6 +152,8 @@ public class KMSWebApp implements ServletContextListener {
       LOG.info("  User: {}", System.getProperty("user.name"));
       LOG.info("  KMS Hadoop Version: " + VersionInfo.getVersion());
       LOG.info("-------------------------------------------------------------");
+
+      TracerUtil.initTracing(kmsConf, "KMS");
 
       kmsAcls = new KMSACLs();
       kmsAcls.startReloader();

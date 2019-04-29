@@ -19,6 +19,8 @@ package org.apache.hadoop.crypto.key.kms.server;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
+import io.opentracing.Scope;
+import io.opentracing.util.GlobalTracer;
 import org.apache.hadoop.util.KMSUtil;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -111,7 +113,8 @@ public class KMS {
   @Produces(MediaType.APPLICATION_JSON)
   @SuppressWarnings("unchecked")
   public Response createKey(Map jsonKey) throws Exception {
-    try{
+    try (Scope scope = GlobalTracer.get().buildSpan("createKey").
+        startActive(true)) {
       LOG.trace("Entering createKey Method.");
       KMSWebApp.getAdminCallsMeter().mark();
       UserGroupInformation user = HttpUserGroupInformation.get();
@@ -183,7 +186,8 @@ public class KMS {
   @Path(KMSRESTConstants.KEY_RESOURCE + "/{name:.*}")
   public Response deleteKey(@PathParam("name") final String name)
       throws Exception {
-    try {
+    try (Scope scope = GlobalTracer.get().buildSpan("deleteKey").
+        startActive(true)) {
       LOG.trace("Entering deleteKey method.");
       KMSWebApp.getAdminCallsMeter().mark();
       UserGroupInformation user = HttpUserGroupInformation.get();
@@ -214,7 +218,8 @@ public class KMS {
   @Produces(MediaType.APPLICATION_JSON)
   public Response rolloverKey(@PathParam("name") final String name,
       Map jsonMaterial) throws Exception {
-    try {
+    try (Scope scope = GlobalTracer.get().buildSpan("rolloverKey").
+        startActive(true)) {
       LOG.trace("Entering rolloverKey Method.");
       KMSWebApp.getAdminCallsMeter().mark();
       UserGroupInformation user = HttpUserGroupInformation.get();
@@ -264,7 +269,8 @@ public class KMS {
       + KMSRESTConstants.INVALIDATECACHE_RESOURCE)
   public Response invalidateCache(@PathParam("name") final String name)
       throws Exception {
-    try {
+    try (Scope scope = GlobalTracer.get().buildSpan("invalidateCache").
+        startActive(true)) {
       LOG.trace("Entering invalidateCache Method.");
       KMSWebApp.getAdminCallsMeter().mark();
       checkNotEmpty(name, "name");
@@ -295,7 +301,8 @@ public class KMS {
   @Produces(MediaType.APPLICATION_JSON)
   public Response getKeysMetadata(@QueryParam(KMSRESTConstants.KEY)
       List<String> keyNamesList) throws Exception {
-    try {
+    try (Scope scope = GlobalTracer.get().buildSpan("getKeysMetadata").
+        startActive(true)) {
       LOG.trace("Entering getKeysMetadata method.");
       KMSWebApp.getAdminCallsMeter().mark();
       UserGroupInformation user = HttpUserGroupInformation.get();
@@ -327,7 +334,8 @@ public class KMS {
   @Path(KMSRESTConstants.KEYS_NAMES_RESOURCE)
   @Produces(MediaType.APPLICATION_JSON)
   public Response getKeyNames() throws Exception {
-    try {
+    try (Scope scope = GlobalTracer.get().buildSpan("getKeyNames").
+        startActive(true)) {
       LOG.trace("Entering getKeyNames method.");
       KMSWebApp.getAdminCallsMeter().mark();
       UserGroupInformation user = HttpUserGroupInformation.get();
@@ -373,7 +381,8 @@ public class KMS {
   @Produces(MediaType.APPLICATION_JSON)
   public Response getMetadata(@PathParam("name") final String name)
       throws Exception {
-    try {
+    try (Scope scope = GlobalTracer.get().buildSpan("getMetadata").
+        startActive(true)) {
       LOG.trace("Entering getMetadata method.");
       UserGroupInformation user = HttpUserGroupInformation.get();
       checkNotEmpty(name, "name");
@@ -407,7 +416,8 @@ public class KMS {
   @Produces(MediaType.APPLICATION_JSON)
   public Response getCurrentVersion(@PathParam("name") final String name)
       throws Exception {
-    try {
+    try (Scope scope = GlobalTracer.get().buildSpan("getCurrentVersion").
+        startActive(true)) {
       LOG.trace("Entering getCurrentVersion method.");
       UserGroupInformation user = HttpUserGroupInformation.get();
       checkNotEmpty(name, "name");
@@ -440,7 +450,8 @@ public class KMS {
   @Produces(MediaType.APPLICATION_JSON)
   public Response getKeyVersion(
       @PathParam("versionName") final String versionName) throws Exception {
-    try {
+    try (Scope scope = GlobalTracer.get().buildSpan("getKeyVersion").
+        startActive(true)) {
       LOG.trace("Entering getKeyVersion method.");
       UserGroupInformation user = HttpUserGroupInformation.get();
       checkNotEmpty(versionName, "versionName");
@@ -481,7 +492,8 @@ public class KMS {
           @DefaultValue("1")
           @QueryParam(KMSRESTConstants.EEK_NUM_KEYS) final int numKeys)
           throws Exception {
-    try {
+    try (Scope scope = GlobalTracer.get().buildSpan("generateEncryptedKeys").
+        startActive(true)) {
       LOG.trace("Entering generateEncryptedKeys method.");
       UserGroupInformation user = HttpUserGroupInformation.get();
       checkNotEmpty(name, "name");
@@ -553,7 +565,8 @@ public class KMS {
       final List<Map> jsonPayload)
       throws Exception {
     LOG.trace("Entering reencryptEncryptedKeys method.");
-    try {
+    try (Scope scope = GlobalTracer.get().buildSpan("reencryptEncryptedKeys").
+        startActive(true)) {
       final Stopwatch sw = new Stopwatch().start();
       checkNotEmpty(name, "name");
       checkNotNull(jsonPayload, "jsonPayload");
@@ -610,7 +623,8 @@ public class KMS {
       @QueryParam(KMSRESTConstants.EEK_OP) String eekOp,
       Map jsonPayload)
       throws Exception {
-    try {
+    try (Scope scope = GlobalTracer.get().buildSpan(KMSRESTConstants.EEK_DECRYPT).
+        startActive(true)) {
       LOG.trace("Entering decryptEncryptedKey method.");
       UserGroupInformation user = HttpUserGroupInformation.get();
       checkNotEmpty(versionName, "versionName");
@@ -694,7 +708,8 @@ public class KMS {
   @Produces(MediaType.APPLICATION_JSON)
   public Response getKeyVersions(@PathParam("name") final String name)
       throws Exception {
-    try {
+    try (Scope scope = GlobalTracer.get().buildSpan("getKeyVersions").
+        startActive(true)) {
       LOG.trace("Entering getKeyVersions method.");
       UserGroupInformation user = HttpUserGroupInformation.get();
       checkNotEmpty(name, "name");
