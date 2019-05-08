@@ -557,7 +557,7 @@ public abstract class KeyProvider {
    * @return the name of the new version of the key
    * @throws IOException
    */
-  public abstract KeyVersion rollNewVersion(String name,
+    public abstract KeyVersion rollNewVersion(String name,
                                              byte[] material
                                             ) throws IOException;
 

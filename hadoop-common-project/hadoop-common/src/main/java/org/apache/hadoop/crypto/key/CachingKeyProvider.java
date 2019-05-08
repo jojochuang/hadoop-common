@@ -86,7 +86,8 @@ public class CachingKeyProvider extends
                     final long endTime = Time.monotonicNow();
 
                     keyVersionCacheStat.add(endTime - startTime);
-                    keyVersionCacheMiss.incrementAndGet();
+                    int cacheMiss = keyVersionCacheMiss.incrementAndGet();
+                    scope.span().setTag("cache miss count", cacheMiss);
                     return kv;
                   }
                 }
@@ -106,7 +107,8 @@ public class CachingKeyProvider extends
                     }
                     final long endTime = Time.monotonicNow();
                     keyMetadataCacheStat.add(endTime - startTime);
-                    keyMetadataCacheMiss.incrementAndGet();
+                    int cacheMiss = keyMetadataCacheMiss.incrementAndGet();
+                    scope.span().setTag("cache miss count", cacheMiss);
                     return meta;
                   }
                 }
@@ -126,7 +128,8 @@ public class CachingKeyProvider extends
                 }
                 final long endTime = Time.monotonicNow();
                 currentKeyCacheStat.add(endTime - startTime);
-                currentKeyCacheMiss.incrementAndGet();
+                int cacheMiss = currentKeyCacheMiss.incrementAndGet();
+                scope.span().setTag("cache miss count", cacheMiss);
                 return kv;
               }
             }

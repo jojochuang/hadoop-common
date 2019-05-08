@@ -24,6 +24,7 @@ import org.apache.hadoop.crypto.key.KeyProvider;
 import org.apache.hadoop.crypto.key.KeyProviderCryptoExtension.EncryptedKeyVersion;
 import org.apache.hadoop.crypto.key.KeyProviderDelegationTokenExtension;
 import org.apache.hadoop.crypto.key.KeyProviderFactory;
+import org.apache.hadoop.crypto.key.TracerUtil;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IOUtils;
@@ -430,6 +431,8 @@ public class KMSClientProvider extends KeyProvider implements CryptoExtension,
           }
         }
       }
+      // params.put(KMSRESTConstants.TRACEID_FIELD, TracerUtil.exportCurrentSpan());
+      uriBuilder.addParameter(KMSRESTConstants.TRACEID_FIELD, TracerUtil.exportCurrentSpan());
       return uriBuilder.build().toURL();
     } catch (URISyntaxException ex) {
       throw new IOException(ex);

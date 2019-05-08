@@ -59,6 +59,8 @@ public class KMSRESTConstants {
   public static final String ENCRYPTED_KEY_VERSION_FIELD =
       "encryptedKeyVersion";
 
+  public static final String TRACEID_FIELD = "trace";
+
   public static final String ERROR_EXCEPTION_JSON = "exception";
   public static final String ERROR_MESSAGE_JSON = "message";
 

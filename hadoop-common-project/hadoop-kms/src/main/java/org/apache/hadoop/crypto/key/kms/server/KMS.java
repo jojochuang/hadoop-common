@@ -21,6 +21,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import io.opentracing.Scope;
 import io.opentracing.util.GlobalTracer;
+import org.apache.hadoop.crypto.key.TracerUtil;
 import org.apache.hadoop.util.KMSUtil;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -112,9 +113,11 @@ public class KMS {
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
   @SuppressWarnings("unchecked")
-  public Response createKey(Map jsonKey) throws Exception {
-    try (Scope scope = GlobalTracer.get().buildSpan("createKey").
-        startActive(true)) {
+  public Response createKey(
+      @DefaultValue("")
+      @QueryParam(KMSRESTConstants.TRACEID_FIELD) String traceId,
+      Map jsonKey) throws Exception {
+    try (Scope scope = TracerUtil.importAndCreateScope("createKey", traceId)) {
       LOG.trace("Entering createKey Method.");
       KMSWebApp.getAdminCallsMeter().mark();
       UserGroupInformation user = HttpUserGroupInformation.get();
@@ -184,10 +187,11 @@ public class KMS {
 
   @DELETE
   @Path(KMSRESTConstants.KEY_RESOURCE + "/{name:.*}")
-  public Response deleteKey(@PathParam("name") final String name)
+  public Response deleteKey(@PathParam("name") final String name,
+      @DefaultValue("")
+      @QueryParam(KMSRESTConstants.TRACEID_FIELD) final String traceId)
       throws Exception {
-    try (Scope scope = GlobalTracer.get().buildSpan("deleteKey").
-        startActive(true)) {
+    try (Scope scope = TracerUtil.importAndCreateScope("deleteKey",traceId)) {
       LOG.trace("Entering deleteKey method.");
       KMSWebApp.getAdminCallsMeter().mark();
       UserGroupInformation user = HttpUserGroupInformation.get();
@@ -217,9 +221,10 @@ public class KMS {
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
   public Response rolloverKey(@PathParam("name") final String name,
+      @DefaultValue("")
+      @QueryParam(KMSRESTConstants.TRACEID_FIELD) final String traceId,
       Map jsonMaterial) throws Exception {
-    try (Scope scope = GlobalTracer.get().buildSpan("rolloverKey").
-        startActive(true)) {
+    try (Scope scope = TracerUtil.importAndCreateScope("rolloverKey", traceId)) {
       LOG.trace("Entering rolloverKey Method.");
       KMSWebApp.getAdminCallsMeter().mark();
       UserGroupInformation user = HttpUserGroupInformation.get();
@@ -267,10 +272,11 @@ public class KMS {
   @POST
   @Path(KMSRESTConstants.KEY_RESOURCE + "/{name:.*}/"
       + KMSRESTConstants.INVALIDATECACHE_RESOURCE)
-  public Response invalidateCache(@PathParam("name") final String name)
+  public Response invalidateCache(@PathParam("name") final String name,
+      @DefaultValue("")
+      @QueryParam(KMSRESTConstants.TRACEID_FIELD) final String traceId)
       throws Exception {
-    try (Scope scope = GlobalTracer.get().buildSpan("invalidateCache").
-        startActive(true)) {
+    try (Scope scope = TracerUtil.importAndCreateScope("invalidateCache", traceId)) {
       LOG.trace("Entering invalidateCache Method.");
       KMSWebApp.getAdminCallsMeter().mark();
       checkNotEmpty(name, "name");
@@ -300,9 +306,10 @@ public class KMS {
   @Path(KMSRESTConstants.KEYS_METADATA_RESOURCE)
   @Produces(MediaType.APPLICATION_JSON)
   public Response getKeysMetadata(@QueryParam(KMSRESTConstants.KEY)
-      List<String> keyNamesList) throws Exception {
-    try (Scope scope = GlobalTracer.get().buildSpan("getKeysMetadata").
-        startActive(true)) {
+      List<String> keyNamesList,
+      @DefaultValue("")
+      @QueryParam(KMSRESTConstants.TRACEID_FIELD) final String traceId) throws Exception {
+    try (Scope scope = TracerUtil.importAndCreateScope("getKeysMetadata", traceId)) {
       LOG.trace("Entering getKeysMetadata method.");
       KMSWebApp.getAdminCallsMeter().mark();
       UserGroupInformation user = HttpUserGroupInformation.get();
@@ -333,9 +340,10 @@ public class KMS {
   @GET
   @Path(KMSRESTConstants.KEYS_NAMES_RESOURCE)
   @Produces(MediaType.APPLICATION_JSON)
-  public Response getKeyNames() throws Exception {
-    try (Scope scope = GlobalTracer.get().buildSpan("getKeyNames").
-        startActive(true)) {
+  public Response getKeyNames(
+      @DefaultValue("")
+      @QueryParam(KMSRESTConstants.TRACEID_FIELD) final String traceId) throws Exception {
+    try (Scope scope = TracerUtil.importAndCreateScope("getKeysMetadata", traceId)) {
       LOG.trace("Entering getKeyNames method.");
       KMSWebApp.getAdminCallsMeter().mark();
       UserGroupInformation user = HttpUserGroupInformation.get();
@@ -362,13 +370,15 @@ public class KMS {
 
   @GET
   @Path(KMSRESTConstants.KEY_RESOURCE + "/{name:.*}")
-  public Response getKey(@PathParam("name") String name)
+  public Response getKey(@PathParam("name") String name,
+      @DefaultValue("")
+      @QueryParam(KMSRESTConstants.TRACEID_FIELD) final String traceId)
       throws Exception {
     try {
       LOG.trace("Entering getKey method.");
       LOG.debug("Getting key information for key with name {}.", name);
       LOG.trace("Exiting getKey method.");
-      return getMetadata(name);
+      return getMetadata(name, traceId);
     } catch (Exception e) {
       LOG.debug("Exception in getKey.", e);
       throw e;
@@ -379,10 +389,11 @@ public class KMS {
   @Path(KMSRESTConstants.KEY_RESOURCE + "/{name:.*}/" +
       KMSRESTConstants.METADATA_SUB_RESOURCE)
   @Produces(MediaType.APPLICATION_JSON)
-  public Response getMetadata(@PathParam("name") final String name)
+  public Response getMetadata(@PathParam("name") final String name,
+      @DefaultValue("")
+      @QueryParam(KMSRESTConstants.TRACEID_FIELD) final String traceId)
       throws Exception {
-    try (Scope scope = GlobalTracer.get().buildSpan("getMetadata").
-        startActive(true)) {
+    try (Scope scope = TracerUtil.importAndCreateScope("getMetadata", traceId)) {
       LOG.trace("Entering getMetadata method.");
       UserGroupInformation user = HttpUserGroupInformation.get();
       checkNotEmpty(name, "name");
@@ -414,10 +425,11 @@ public class KMS {
   @Path(KMSRESTConstants.KEY_RESOURCE + "/{name:.*}/" +
       KMSRESTConstants.CURRENT_VERSION_SUB_RESOURCE)
   @Produces(MediaType.APPLICATION_JSON)
-  public Response getCurrentVersion(@PathParam("name") final String name)
+  public Response getCurrentVersion(@PathParam("name") final String name,
+      @DefaultValue("")
+      @QueryParam(KMSRESTConstants.TRACEID_FIELD) final String traceId)
       throws Exception {
-    try (Scope scope = GlobalTracer.get().buildSpan("getCurrentVersion").
-        startActive(true)) {
+    try (Scope scope = TracerUtil.importAndCreateScope("getCurrentVersion", traceId)) {
       LOG.trace("Entering getCurrentVersion method.");
       UserGroupInformation user = HttpUserGroupInformation.get();
       checkNotEmpty(name, "name");
@@ -449,9 +461,10 @@ public class KMS {
   @Path(KMSRESTConstants.KEY_VERSION_RESOURCE + "/{versionName:.*}")
   @Produces(MediaType.APPLICATION_JSON)
   public Response getKeyVersion(
-      @PathParam("versionName") final String versionName) throws Exception {
-    try (Scope scope = GlobalTracer.get().buildSpan("getKeyVersion").
-        startActive(true)) {
+      @PathParam("versionName") final String versionName,
+      @DefaultValue("")
+      @QueryParam(KMSRESTConstants.TRACEID_FIELD) final String traceId) throws Exception {
+    try (Scope scope = TracerUtil.importAndCreateScope("getKeyVersion", traceId)) {
       LOG.trace("Entering getKeyVersion method.");
       UserGroupInformation user = HttpUserGroupInformation.get();
       checkNotEmpty(versionName, "versionName");
@@ -490,10 +503,12 @@ public class KMS {
           @PathParam("name") final String name,
           @QueryParam(KMSRESTConstants.EEK_OP) String edekOp,
           @DefaultValue("1")
-          @QueryParam(KMSRESTConstants.EEK_NUM_KEYS) final int numKeys)
+          @QueryParam(KMSRESTConstants.EEK_NUM_KEYS) final int numKeys,
+          @DefaultValue("")
+          @QueryParam(KMSRESTConstants.TRACEID_FIELD) final String traceId)
           throws Exception {
-    try (Scope scope = GlobalTracer.get().buildSpan("generateEncryptedKeys").
-        startActive(true)) {
+    try (Scope scope = TracerUtil.importAndCreateScope(edekOp, traceId)) {
+      scope.span().setTag("numKeys", numKeys);
       LOG.trace("Entering generateEncryptedKeys method.");
       UserGroupInformation user = HttpUserGroupInformation.get();
       checkNotEmpty(name, "name");
@@ -562,11 +577,12 @@ public class KMS {
   @Produces(MediaType.APPLICATION_JSON)
   public Response reencryptEncryptedKeys(
       @PathParam("name") final String name,
-      final List<Map> jsonPayload)
+      final List<Map> jsonPayload,
+      @DefaultValue("")
+      @QueryParam(KMSRESTConstants.TRACEID_FIELD) final String traceId)
       throws Exception {
     LOG.trace("Entering reencryptEncryptedKeys method.");
-    try (Scope scope = GlobalTracer.get().buildSpan("reencryptEncryptedKeys").
-        startActive(true)) {
+    try (Scope scope = TracerUtil.importAndCreateScope("reencryptEncryptedKeys", traceId)) {
       final Stopwatch sw = new Stopwatch().start();
       checkNotEmpty(name, "name");
       checkNotNull(jsonPayload, "jsonPayload");
@@ -621,10 +637,11 @@ public class KMS {
   public Response handleEncryptedKeyOp(
       @PathParam("versionName") final String versionName,
       @QueryParam(KMSRESTConstants.EEK_OP) String eekOp,
+      @DefaultValue("")
+      @QueryParam(KMSRESTConstants.TRACEID_FIELD) final String traceId,
       Map jsonPayload)
       throws Exception {
-    try (Scope scope = GlobalTracer.get().buildSpan(KMSRESTConstants.EEK_DECRYPT).
-        startActive(true)) {
+    try (Scope scope = TracerUtil.importAndCreateScope(eekOp, traceId)) {
       LOG.trace("Entering decryptEncryptedKey method.");
       UserGroupInformation user = HttpUserGroupInformation.get();
       checkNotEmpty(versionName, "versionName");
@@ -706,10 +723,11 @@ public class KMS {
   @Path(KMSRESTConstants.KEY_RESOURCE + "/{name:.*}/" +
       KMSRESTConstants.VERSIONS_SUB_RESOURCE)
   @Produces(MediaType.APPLICATION_JSON)
-  public Response getKeyVersions(@PathParam("name") final String name)
+  public Response getKeyVersions(@PathParam("name") final String name,
+      @DefaultValue("")
+      @QueryParam(KMSRESTConstants.TRACEID_FIELD) final String traceId)
       throws Exception {
-    try (Scope scope = GlobalTracer.get().buildSpan("getKeyVersions").
-        startActive(true)) {
+    try (Scope scope = TracerUtil.importAndCreateScope("getKeyVersions", traceId)) {
       LOG.trace("Entering getKeyVersions method.");
       UserGroupInformation user = HttpUserGroupInformation.get();
       checkNotEmpty(name, "name");

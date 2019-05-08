@@ -38,6 +38,8 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import io.opentracing.Scope;
+import io.opentracing.util.GlobalTracer;
 import org.apache.hadoop.classification.InterfaceAudience;
 
 /**
@@ -243,9 +245,11 @@ public class ValueQueue <E> {
                       throws Exception {
                     LinkedBlockingQueue<E> keyQueue =
                         new LinkedBlockingQueue<E>();
-                    refiller.fillQueueForKey(keyName, keyQueue,
-                        (int)(lowWatermark * numValues));
-                    return keyQueue;
+                    try (Scope scope = GlobalTracer.get().buildSpan("refill").
+                        startActive(true)) {
+                      refiller.fillQueueForKey(keyName, keyQueue, (int) (lowWatermark * numValues));
+                      return keyQueue;
+                    }
                   }
                 });
 
