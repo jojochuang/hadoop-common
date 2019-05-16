@@ -29,8 +29,8 @@ public class SimpleKMSAuditLogParser implements KMSAuditParser{
       .trimResults().omitEmptyStrings().withKeyValueSeparator("=");
   private static final Pattern AUDIT_DETAILS_PATTERN =
       Pattern.compile("^OK\\[(.+)].*$");
-  private static final DateFormat AUDIT_DATE_FORMAT = new SimpleDateFormat(
-      "yyyy-MM-dd hh:mm:ss,SSS");
+  static final DateFormat AUDIT_DATE_FORMAT = new SimpleDateFormat(
+      "yyyy-MM-dd HH:mm:ss,SSS");
 
   private long startTimestamp;
 
@@ -64,8 +64,10 @@ public class SimpleKMSAuditLogParser implements KMSAuditParser{
       throw new IOException("Exception while parsing timestamp from audit log",
           p);
     }
+    LOG.info("timestamp=" +relativeTimestamp);
 
     String details = m.group(2);
+    // parse only authorized audits. Unauthorized audits don't carry details and can't be replayed.
     Matcher m2 = AUDIT_DETAILS_PATTERN.matcher(details);
     if (!m2.find()) {
       LOG.warn("invalid audit log entry: " + details);

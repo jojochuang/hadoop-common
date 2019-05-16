@@ -45,4 +45,14 @@ public class TestKMSAuditLogPreprocessor {
     driver.setConf(conf);
     ToolRunner.run(driver, args);
   }
+
+  @Test
+  public void test2() throws Exception {
+    // Use a local jks file as key provider, test it.
+    String[] args = {"-a", System.getProperty("test.cache.data", "target/test-classes") +
+        "/audit/kms-audit.log", "-c", "1"};
+    KMSAuditLogPreprocessor driver = new KMSAuditLogPreprocessor();
+    driver.setConf(conf);
+    ToolRunner.run(driver, args);
+  }
 }

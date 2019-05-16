@@ -17,13 +17,18 @@
  */
 package org.apache.hadoop.tools.kmsreplay;
 
+import io.opentracing.Scope;
+import io.opentracing.util.GlobalTracer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.crypto.key.KeyProviderCryptoExtension;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.MRJobConfig;
 import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.lib.input.FileSplit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,6 +65,8 @@ public  class AuditReplayMapper
   private DelayQueue<AuditReplayCommand> commandQueue;
   private ScheduledThreadPoolExecutor progressExecutor;
 
+  private Scope scopeNameNode = null;
+
   private static final String NUM_THREADS_KEY = "auditreplay.num-threads";
   private static final int NUM_THREADS_DEFAULT = 1;
   public static final String RATE_FACTOR_KEY = "auditreplay.rate-factor";
@@ -86,6 +93,8 @@ public  class AuditReplayMapper
     GET_KEY_VERSIONS, GET_METADATA, GET_KEY_VERSION, GET_CURRENT_KEY,
     GENERATE_EEK, DECRYPT_EEK, REENCRYPT_EEK, REENCRYPT_EEK_BATCH
   }
+
+  private boolean isNameNode = false; // determine if this mapper plays NameNode
 
   @Override
   public void setup(Context context) throws IOException, InterruptedException {
@@ -130,10 +139,26 @@ public  class AuditReplayMapper
     commandQueue = new DelayQueue<>();
     keyProviderCache = new ConcurrentHashMap<>();
 
+    InputSplit inputSplit = context.getInputSplit();
+    if (inputSplit instanceof FileSplit) {
+      Path fileSplitPath = ((FileSplit)inputSplit).getPath();
+      LOG.info(fileSplitPath.getName());
+      if (fileSplitPath.getName().equals("kms-audit-generate_eek.log")) {
+        isNameNode = true;
+        LOG.info("Simulate NameNode");
+      } else {
+        LOG.info("Simulate HDFS clients");
+      }
+    }
+
+    if (isNameNode) {
+      scopeNameNode = GlobalTracer.get().buildSpan("Simulated NameNode").startActive(true);
+    }
+
     threads = new ArrayList<>();
     for (int t = 0; t < numThreads; t++) {
       KMSAuditReplayThread thread = new KMSAuditReplayThread(context,
-          commandQueue, keyProviderCache, cachedKeyVersion, totalAuditCounter, auditReplayCounter);
+          commandQueue, keyProviderCache, cachedKeyVersion, totalAuditCounter, auditReplayCounter, isNameNode);
       threads.add(thread);
       thread.start();
     }
@@ -181,6 +206,10 @@ public  class AuditReplayMapper
     if (threadException.isPresent()) {
       throw new RuntimeException("Exception in AuditReplayThread",
           threadException.get());
+    }
+
+    if (scopeNameNode != null) {
+      scopeNameNode.close();
     }
     /*LOG.info("Time taken to replay the logs in ms: "
         + (System.currentTimeMillis() - startTimestampMs));

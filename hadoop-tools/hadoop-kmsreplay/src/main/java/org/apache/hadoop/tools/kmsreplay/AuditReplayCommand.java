@@ -1,8 +1,16 @@
 package org.apache.hadoop.tools.kmsreplay;
 
+import com.google.common.base.Joiner;
+import com.google.common.base.Strings;
+
+import java.util.Date;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Delayed;
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.hadoop.tools.kmsreplay.SimpleKMSAuditLogParser.AUDIT_DATE_FORMAT;
 
 public class AuditReplayCommand implements Delayed {
   private long absoluteTimestamp;
@@ -66,6 +74,10 @@ public class AuditReplayCommand implements Delayed {
     return interval;
   }
 
+  public void setAccessCount(int accessCount) {
+    this.accessCount = accessCount;
+  }
+
   /**
    * A command representing a Poison Pill, indicating that the processing thread
    * should not process any further items and instead should terminate itself.
@@ -110,5 +122,39 @@ public class AuditReplayCommand implements Delayed {
     return String.format("AuditReplayCommand(absoluteTimestamp=%d, ugi=%s, "
             + "command=%s, key=%s, accessCount=%d, interval=%d",
         absoluteTimestamp, ugi, command, key, accessCount, interval);
+  }
+
+  public String print() {
+    Date date = new Date(absoluteTimestamp);
+    final List<String> kvs = new LinkedList<>();
+    if (command != null) {
+      kvs.add("op=" + command);
+    }
+    if (!Strings.isNullOrEmpty(key)) {
+      kvs.add("key=" + key);
+    }
+    if (!Strings.isNullOrEmpty(ugi)) {
+      kvs.add("user=" + ugi);
+    }
+
+    if (accessCount > 0) {
+      kvs.add("accessCount=" + accessCount);
+      kvs.add("interval=" + interval + "ms");
+    }
+    /*f (kvs.isEmpty()) {
+      //auditLog.info("{} {}", status, event.getExtraMsg());
+      return String.format("%s OK[op=%s, key=%s, user=%s, accessCount=%d, interval=%dms]\n",
+          AUDIT_DATE_FORMAT.format(date),
+          command, key, ugi, accessCount, interval);
+    } else {*/
+      final String join = Joiner.on(", ").join(kvs);
+      //auditLog.info("{}[{}] {}", status, join, event.getExtraMsg());
+    return String.format("%s OK[%s] \n",
+        AUDIT_DATE_FORMAT.format(date),
+        join);
+    /*}*/
+
+
+
   }
 }

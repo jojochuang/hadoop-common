@@ -17,9 +17,7 @@
  */
 package org.apache.hadoop.tools.kmsreplay;
 
-import io.jaegertracing.internal.JaegerTracer;
 import io.opentracing.propagation.Format;
-import io.opentracing.util.GlobalTracer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileStatus;
@@ -28,7 +26,6 @@ import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.MRJobConfig;
-import org.apache.hadoop.mapreduce.filecache.DistributedCache;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.NullOutputFormat;
@@ -47,6 +44,7 @@ public class KMSAuditReplayDriver extends Configured implements Tool {
   public static final String INPUT_PATH_KEY = "auditreplay.input_path";
   public static final String EDEK_DUMP_PATH_KEY = "edek_dump.input_path";
   public static final String START_TIMESTAMP_MS = "start_timestamp_ms";
+  public static final String NUM_ORIGINAL_KMS = "num_original_kms";
 
   public static void main(String[] args) throws Exception {
     KMSAuditReplayDriver driver = new KMSAuditReplayDriver();
@@ -77,8 +75,7 @@ public class KMSAuditReplayDriver extends Configured implements Tool {
   }
 
   private Job getJobForSubmission(Configuration baseConf)
-      throws IOException, ClassNotFoundException, InstantiationException,
-      IllegalAccessException {
+      throws IOException {
     Configuration conf = new Configuration(baseConf);
     conf.setBoolean(MRJobConfig.MAP_SPECULATIVE, false);
     LOG.info("input path = " + conf.get(INPUT_PATH_KEY));
@@ -102,8 +99,6 @@ public class KMSAuditReplayDriver extends Configured implements Tool {
     job.setMapOutputValueClass(NullWritable.class);
     job.setOutputKeyClass(NullWritable.class);
     job.setOutputValueClass(NullWritable.class);
-
-    //DistributedCache.addFileToClassPath(TestMRJobs.APP_JAR, conf);
 
     return job;
   }

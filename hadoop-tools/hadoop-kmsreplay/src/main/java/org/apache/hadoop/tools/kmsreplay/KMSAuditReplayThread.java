@@ -24,7 +24,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.crypto.key.KeyProvider;
 import org.apache.hadoop.crypto.key.KeyProviderCryptoExtension;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
-import org.apache.hadoop.hdfs.HdfsKMSUtil;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.KMSUtil;
@@ -38,6 +37,8 @@ import java.util.Map;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.hadoop.tools.kmsreplay.KMSAuditReplayDriver.NUM_ORIGINAL_KMS;
+
 public class KMSAuditReplayThread extends Thread {
   private static final Logger LOG =
       LoggerFactory.getLogger(KMSAuditReplayThread.class);
@@ -47,6 +48,7 @@ public class KMSAuditReplayThread extends Thread {
   private Map<String, KeyProviderCryptoExtension> keyProviderCache;
   private AtomicInteger totalAuditCounter;
   private AtomicInteger auditReplayCounter;
+  private boolean isNameNode;
 
   private long startTimestampMs;
   private Configuration mapperConf;
@@ -56,22 +58,36 @@ public class KMSAuditReplayThread extends Thread {
 
   // a cached KeyVersion
   private Map<String, KeyProviderCryptoExtension.EncryptedKeyVersion> cachedKeyVersion;
+  private int generateEEKBatchSize = 150;
+  // specify the number of KMSes in the original cluster
+  private int numKMS = 2;
 
   KMSAuditReplayThread(Mapper.Context mapperContext, DelayQueue<AuditReplayCommand> commandQueue,
       Map<String, KeyProviderCryptoExtension> keyProviderCache,
       Map<String, KeyProviderCryptoExtension.EncryptedKeyVersion> cachedKeyVersion,
-      AtomicInteger totalAuditCounter, AtomicInteger auditReplayCounter) throws IOException {
+      AtomicInteger totalAuditCounter, AtomicInteger auditReplayCounter, boolean isNameNode) throws IOException {
     this.mapperContext = mapperContext;
     this.commandQueue = commandQueue;
     this.keyProviderCache = keyProviderCache;
     this.totalAuditCounter = totalAuditCounter;
     this.auditReplayCounter = auditReplayCounter;
+    this.isNameNode = isNameNode;
 
     mapperConf = mapperContext.getConfiguration();
     startTimestampMs = mapperConf.getLong(KMSAuditReplayDriver.START_TIMESTAMP_MS, -1);
 
     loginUser = UserGroupInformation.getLoginUser();
     this.cachedKeyVersion = cachedKeyVersion;
+    generateEEKBatchSize = (int)(mapperConf.getInt(
+        CommonConfigurationKeysPublic.KMS_CLIENT_ENC_KEY_CACHE_SIZE,
+        CommonConfigurationKeysPublic.
+            KMS_CLIENT_ENC_KEY_CACHE_SIZE_DEFAULT) *
+        mapperConf.getFloat(
+            CommonConfigurationKeysPublic.
+                KMS_CLIENT_ENC_KEY_CACHE_LOW_WATERMARK,
+            CommonConfigurationKeysPublic.
+                KMS_CLIENT_ENC_KEY_CACHE_LOW_WATERMARK_DEFAULT));
+    numKMS = mapperConf.getInt(NUM_ORIGINAL_KMS, 1);
   }
 
   @VisibleForTesting
@@ -103,7 +119,12 @@ public class KMSAuditReplayThread extends Thread {
   public void run() {
     long currentEpoch = System.currentTimeMillis();
     long delay = startTimestampMs - currentEpoch;
-    try (Scope scope = GlobalTracer.get().buildSpan("main").startActive(true)) {
+
+    Scope scope = null;
+    if (!isNameNode) {
+      scope = GlobalTracer.get().buildSpan("Simulated client").startActive(true);
+    }
+    try {
       if (delay > 0) {
         LOG.info("Sleeping for " + delay + " ms");
         Thread.sleep(delay);
@@ -131,24 +152,19 @@ public class KMSAuditReplayThread extends Thread {
     } catch (Exception e) {
       exception = e;
       LOG.error("ReplayThread encountered exception; exiting.", e);
+    } finally {
+      if (scope != null) {
+        scope.close();
+      }
     }
   }
 
-  /**
-   * Attempt to replay the provided command. Updates counters accordingly.
-   *
-   * @param command The command to replay
-   * @return True iff the command was successfully replayed (i.e., no exceptions
-   *         were thrown).
-   */
-  @VisibleForTesting
-  boolean replayLog(final AuditReplayCommand command) {
-    LOG.info("replay command: " + command);
-    KeyProviderCryptoExtension cachedKeyProvider = keyProviderCache.get(command.getUser());
+  private KeyProviderCryptoExtension getOrCreateKeyProvider(String user) {
+    KeyProviderCryptoExtension cachedKeyProvider = keyProviderCache.get(user);
     if (cachedKeyProvider == null) {
-      LOG.info("KeyProvider for user " + command.getUser() + " doesn't exist yet. Create one ");
+      LOG.info("KeyProvider for user " + user + " doesn't exist yet. Create one ");
       UserGroupInformation ugi =
-          UserGroupInformation.createProxyUser(command.getUser(), loginUser);
+          UserGroupInformation.createProxyUser(user, loginUser);
       cachedKeyProvider = ugi.doAs((PrivilegedAction<KeyProviderCryptoExtension>) () -> {
         KeyProvider keyProvider = null;
         try {
@@ -163,8 +179,22 @@ public class KMSAuditReplayThread extends Thread {
         }
         return KeyProviderCryptoExtension.createKeyProviderCryptoExtension(keyProvider);
       });
-      keyProviderCache.put(command.getUser(), cachedKeyProvider);
+      keyProviderCache.put(user, cachedKeyProvider);
     }
+    return cachedKeyProvider;
+  }
+
+  /**
+   * Attempt to replay the provided command. Updates counters accordingly.
+   *
+   * @param command The command to replay
+   * @return True iff the command was successfully replayed (i.e., no exceptions
+   *         were thrown).
+   */
+  @VisibleForTesting
+  boolean replayLog(final AuditReplayCommand command) {
+    LOG.info("replay command: " + command);
+    KeyProviderCryptoExtension cachedKeyProvider = getOrCreateKeyProvider(command.getUser());
     AuditReplayMapper.KMSOp replayCommand;
     try {
       replayCommand = AuditReplayMapper.KMSOp.valueOf(
@@ -179,93 +209,109 @@ public class KMSAuditReplayThread extends Thread {
       scope.span().setTag("command", replayCommand.toString());
       scope.span().setTag("key", command.getKey());
       scope.span().setTag("user", command.getUser());
-      long startTime = System.currentTimeMillis();
-      switch (replayCommand) {
-      case CREATE_KEY:
-        cachedKeyProvider.createKey(command.getKey(), new KeyProvider.Options(mapperConf));
-        break;
-      case GET_KEYS:
-        cachedKeyProvider.getKeys();
-        break;
-      case DELETE_KEY:
-        cachedKeyProvider.deleteKey(command.getKey());
-        break;
-      case DECRYPT_EEK: {
-        KeyProviderCryptoExtension.EncryptedKeyVersion encryptedKeyVersion =
-            cachedKeyVersion.get(command.getKey());
-        if (encryptedKeyVersion == null) {
-          String key = command.getKey();
-          encryptedKeyVersion = cachedKeyProvider.generateEncryptedKey(key);
-          LOG.debug("created locally an eek and send to KMS to decrypt: " + key + "@" +
-              encryptedKeyVersion.getEncryptionKeyVersionName());
-          cachedKeyVersion.put(key, encryptedKeyVersion);
-        } else{
-          LOG.debug("reuse existing eek for key " + command.getKey());
+      scope.span().setTag("count", command.getAccessCount());
+
+      for (int i = 0; i < command.getAccessCount(); i++) {
+        if (command.getAccessCount() == 1 && command.getInterval() >= 1) {
+          // This audit represents the start of an audit interval. Skip
+          continue;
         }
-        KeyProvider.KeyVersion decryptedKeyVersion =
-            cachedKeyProvider.decryptEncryptedKey(encryptedKeyVersion);
+        long startTime = System.currentTimeMillis();
+        switch (replayCommand) {
+          case CREATE_KEY:
+            cachedKeyProvider.createKey(command.getKey(), new KeyProvider.Options(mapperConf));
+            break;
+          case GET_KEYS:
+            cachedKeyProvider.getKeys();
+            break;
+          case DELETE_KEY:
+            cachedKeyProvider.deleteKey(command.getKey());
+            break;
+          case DECRYPT_EEK: {
+            KeyProviderCryptoExtension.EncryptedKeyVersion encryptedKeyVersion = cachedKeyVersion.get(command.getKey());
+            /*if (encryptedKeyVersion == null) {
+              String key = command.getKey();
+              encryptedKeyVersion = cachedKeyProvider.generateEncryptedKey(key);
+              LOG.debug("created locally an eek and send to KMS to decrypt: " + key + "@"
+                  + encryptedKeyVersion.getEncryptionKeyVersionName());
+              cachedKeyVersion.put(key, encryptedKeyVersion);
+            } else {*/
+              LOG.debug("reuse existing eek for key " + command.getKey());
+            /*}*/
+            KeyProvider.KeyVersion decryptedKeyVersion = cachedKeyProvider.decryptEncryptedKey(encryptedKeyVersion);
 
-        long endTime = System.currentTimeMillis();
-        if (endTime - startTime > 1000) {
-          LOG.warn("DECRYPT_EEK " + command.getKey() + " took " + (endTime - startTime) + " ms.");
-        }
-        assert decryptedKeyVersion != null;
-      }
-        break;
-      case GENERATE_EEK:
-        // this would only come from NameNode
-
-        String key = command.getKey();
-        KeyProviderCryptoExtension.EncryptedKeyVersion encryptedKeyVersion = null;
-        try (Scope scopeGenerate = GlobalTracer.get().buildSpan("generateEncryptedKey").startActive(true)) {
-
-          for (int i=0; i< 150; i++) {
-            encryptedKeyVersion = cachedKeyProvider.generateEncryptedKey(key);
+            long endTime = System.currentTimeMillis();
+            if (endTime - startTime > 1000) {
+              LOG.warn("DECRYPT_EEK " + command.getKey() + " took " + (endTime - startTime) + " ms.");
+            }
+            assert decryptedKeyVersion != null;
+            Thread.sleep(10 * 1000 / command.getAccessCount());
           }
-        }
-        long endTime = System.currentTimeMillis();
-        if (endTime - startTime > 1000) {
-          LOG.warn("GENERATE_EEK " + command.getKey() + " took " + (endTime - startTime) + " ms.");
-        }
-        cachedKeyVersion.put(key, encryptedKeyVersion);
+          break;
+          case GENERATE_EEK:
+            // this would only come from NameNode
+            String key = command.getKey();
+            KeyProviderCryptoExtension.EncryptedKeyVersion encryptedKeyVersion = null;
+            /*int numKMS = 1; // if something wrong with the reflection below, assume we have 1 KMS.
+            try {
+              Field extensionField = KeyProviderCryptoExtension.class.getDeclaredField("extension");
+              extensionField.setAccessible(true);
+              LoadBalancingKMSClientProvider kmsClientProvider =
+                  (LoadBalancingKMSClientProvider)extensionField.get(cachedKeyProvider);
+              numKMS = kmsClientProvider.getProviders().length;
+            } catch (NoSuchFieldException e) {
+              e.printStackTrace();
+            } catch (IllegalAccessException e) {
+              e.printStackTrace();
+            }*/
+            try (Scope scopeGenerate = GlobalTracer.get().buildSpan("generateEncryptedKey").startActive(true)) {
+              scope.span().setTag("count", generateEEKBatchSize * numKMS);
 
-        // Note KMS has an internal EDEK cache (within KMSClientProvider).
-        // but the GENERATE_EEK in  kms audit log are what actually hits KMS, which generates 150 EDEK at once.
-        // So we should invalidate the internal cache to make sure each GENERATE_EEK request hits KMS.
+              for (int gen = 0; gen < generateEEKBatchSize * numKMS; gen++) {
+                encryptedKeyVersion = cachedKeyProvider.generateEncryptedKey(key);
+              }
+            }
+            long endTime = System.currentTimeMillis();
+            if (endTime - startTime > 1000) {
+              LOG.warn("GENERATE_EEK " + command.getKey() + " took " + (endTime - startTime) + " ms.");
+            }
+            cachedKeyVersion.put(key, encryptedKeyVersion);
 
-        /*try (Scope scopeDrain = GlobalTracer.get().buildSpan("drain").startActive(true)) {
-          cachedKeyProvider.drain(command.getKey());
-        }*/
-        break;
-      case GET_METADATA:
-        cachedKeyProvider.getMetadata(command.getKey());
-        break;
-      //case REENCRYPT_EEK:
-        //break;
-      case GET_CURRENT_KEY:
-        cachedKeyProvider.getCurrentKey(command.getKey());
-        break;
-      case GET_KEY_VERSION:
-        KeyProvider.KeyVersion keyVersion = cachedKeyProvider.getKeyVersion(command.getKey());
-        break;
-      case GET_KEY_VERSIONS:
-        cachedKeyProvider.getKeyVersions(command.getKey());
-        break;
-      case INVALIDATE_CACHE:
-        cachedKeyProvider.invalidateCache(command.getKey());
-        break;
-      //case ROLL_NEW_VERSION:
-        //break;
-      case GET_KEYS_METADATA:
-        // TODO: support multiple keys
-        cachedKeyProvider.getKeysMetadata(command.getKey());
-        break;
-      //case REENCRYPT_EEK_BATCH:
-        //break;
-      default:
-        throw new RuntimeException("Unexpected command: " + replayCommand);
-      }
-      //long latency = System.currentTimeMillis() - startTime;
+            // Note KMS has an internal EDEK cache (within KMSClientProvider).
+            // but the GENERATE_EEK in  kms audit log are what actually hits KMS, which generates 150 EDEK at once.
+            // So we should invalidate the internal cache to make sure each GENERATE_EEK request hits KMS.
+
+            Thread.sleep(10 * 1000 / command.getAccessCount());
+            break;
+          case GET_METADATA:
+            cachedKeyProvider.getMetadata(command.getKey());
+            break;
+          //case REENCRYPT_EEK:
+          //break;
+          case GET_CURRENT_KEY:
+            cachedKeyProvider.getCurrentKey(command.getKey());
+            break;
+          case GET_KEY_VERSION:
+            KeyProvider.KeyVersion keyVersion = cachedKeyProvider.getKeyVersion(command.getKey());
+            break;
+          case GET_KEY_VERSIONS:
+            cachedKeyProvider.getKeyVersions(command.getKey());
+            break;
+          case INVALIDATE_CACHE:
+            cachedKeyProvider.invalidateCache(command.getKey());
+            break;
+          //case ROLL_NEW_VERSION:
+          //break;
+          case GET_KEYS_METADATA:
+            // TODO: support multiple keys
+            cachedKeyProvider.getKeysMetadata(command.getKey());
+            break;
+          //case REENCRYPT_EEK_BATCH:
+          //break;
+          default:
+            throw new RuntimeException("Unexpected command: " + replayCommand);
+        }
+        //long latency = System.currentTimeMillis() - startTime;
       /*switch (replayCommand.getType()) {
       case WRITE:
         replayCountersMap.get(REPLAYCOUNTERS.TOTALWRITECOMMANDLATENCY).increment(latency);
@@ -281,24 +327,25 @@ public class KMSAuditReplayThread extends Thread {
       /*individualCommandsMap.get(replayCommand + INDIVIDUAL_COMMANDS_LATENCY_SUFFIX)
           .increment(latency);
       individualCommandsMap.get(replayCommand + INDIVIDUAL_COMMANDS_COUNT_SUFFIX).increment(1);*/
-      return true;
-    } catch (IOException e) {
+      }
+    } catch(IOException e){
       LOG.warn("IOException: " + e.getLocalizedMessage());
       //individualCommandsMap.get(replayCommand + INDIVIDUAL_COMMANDS_INVALID_SUFFIX).increment(1);
       return false;
-    } catch (GeneralSecurityException e) {
+    } catch(GeneralSecurityException e){
       LOG.warn("GeneralSecurityException: " + e.getLocalizedMessage());
       return false;
-    } finally {
+    } catch(InterruptedException e){
+      LOG.warn("InterruptedException: " + e.getLocalizedMessage());
+    } finally{
       int replayed = auditReplayCounter.incrementAndGet();
       double percentReplayed = 100.0 * replayed / totalAuditCounter.get();
-      mapperContext.setStatus( percentReplayed + "%/" + replayed + " replayed");
+      mapperContext.setStatus(String.format("%.1f", percentReplayed) + "%:" + replayed + " replayed");
       if (replayed % 100 == 0) {
-        LOG.info("Replayed " + replayed + " audits. Percent: " + percentReplayed + "%");
+        LOG.info("Replayed " + replayed + " audits. Percent: " + String.format("%.1f", percentReplayed) + "%");
       }
     }
-
-
+    return true;
   }
 
   /**

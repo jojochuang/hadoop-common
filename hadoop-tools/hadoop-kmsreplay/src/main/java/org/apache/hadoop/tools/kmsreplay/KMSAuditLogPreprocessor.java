@@ -29,6 +29,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.crypto.key.KeyProvider;
 import org.apache.hadoop.crypto.key.KeyProviderCryptoExtension;
+import org.apache.hadoop.crypto.key.kms.LoadBalancingKMSClientProvider;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -62,7 +63,8 @@ import java.util.function.Function;
 import static org.apache.hadoop.tools.kmsreplay.SimpleKMSAuditLogParser.AUDIT_START_TIMESTAMP_KEY;
 
 /**
- *
+ * Preprocess KMS Audit log, split the audit log files into multiple, generate EDEK dump file.
+ * Create encryption zone key and one EDEK per zone.
  */
 public class KMSAuditLogPreprocessor extends Configured implements Tool {
   private static final Logger LOG =
@@ -80,6 +82,7 @@ public class KMSAuditLogPreprocessor extends Configured implements Tool {
   private boolean dryRun;
   private String edekDumpFileName;
   private String auditInputFileName;
+  private int numClients;
 
   private Function<Long, Long> relativeToAbsoluteTimestamp =
       (input) -> input;
@@ -93,6 +96,9 @@ public class KMSAuditLogPreprocessor extends Configured implements Tool {
   public static final String DEFAULT_EDEK_DUMP_FILE = "edek-dump";
 
   public static final String LOAD_EDEK_FILE = "loadEDEK";
+
+  public static final String NUM_CLIENTS = "numClients";
+  public static final int NUM_CLIENTS_DEFAULT = 10;
 
   private List<AuditReplayCommand> generateEEKCommandList =
       new ArrayList<>();
@@ -121,8 +127,11 @@ public class KMSAuditLogPreprocessor extends Configured implements Tool {
 
     String genFileName = "kms-audit-generate_eek.log";
     BufferedWriter genWriter = new BufferedWriter(new FileWriter(genFileName));
-    String decFileName = "kms-audit-decrypt_eek.log";
-    BufferedWriter decWriter = new BufferedWriter(new FileWriter(decFileName));
+    String decFilePrefixName = "kms-audit-decrypt_eek.log";
+    BufferedWriter[] decWriter = new BufferedWriter[numClients];
+    for (int i = 0; i < numClients; i++) {
+      decWriter[i] = new BufferedWriter(new FileWriter(decFilePrefixName + i));
+    }
     // read file line by line
     try (BufferedReader reader = new BufferedReader(new FileReader(auditInputFileName))) {
       String line;
@@ -135,22 +144,82 @@ public class KMSAuditLogPreprocessor extends Configured implements Tool {
         if (cmd == null) {
           continue;
         }
-        // all GENERATE_EEK comes from NN
-        // expand audit log entries
+
+        AuditReplayMapper.KMSOp replayCommand;
+        try {
+          replayCommand = AuditReplayMapper.KMSOp.valueOf(
+              cmd.getCommand().split(" ")[0].toUpperCase());
+        } catch (IllegalArgumentException iae) {
+          LOG.warn("Unsupported/invalid command: " + cmd);
+          //replayCountersMap.get(REPLAYCOUNTERS.TOTALUNSUPPORTEDCOMMANDS).increment(1);
+          continue;
+        }
 
         accessedKey.add(cmd.getKey());
-        if (cmd.getCommand().equals("GENERATE_EEK")) {
-          //generateEEKCommandList.add(cmd);
+        switch (replayCommand) {
+          // NameNode only requests
+          case GET_METADATA:
+          case GENERATE_EEK:
+            // all GENERATE_EEK comes from NN
+            // expand audit log entries
+            genWriter.append(line).append("\n");
+            break;
+        //case REENCRYPT_EEK_BATCH:
+        //break;
+
+            
+          // Client-issued requests
+          case DECRYPT_EEK:
+
+          case CREATE_KEY: // used by KeyShell
+          case GET_KEYS: // used by KeyShell
+          case DELETE_KEY: // used by KeyShell
+          case INVALIDATE_CACHE: // used by KeyShell
+          case GET_KEYS_METADATA: // used by KeyShell
+          case ROLL_NEW_VERSION: // used by KeyShell
+            int extra = cmd.getAccessCount() % numClients;
+            int accessCountPerClient = (cmd.getAccessCount()-extra) / numClients;
+            AuditReplayCommand clientCommand = new AuditReplayCommand(
+                cmd.getAbsoluteTimestamp(), cmd.getCommand(), cmd.getKey(),
+                cmd.getUser(), accessCountPerClient, cmd.getInterval());
+            for (int i = extra; i < numClients; i++) {
+              decWriter[i].append(clientCommand.print());
+            }
+            clientCommand.setAccessCount(accessCountPerClient + 1);
+            for (int i = 0; i < extra; i++) {
+              decWriter[i].append(clientCommand.print());
+            }
+
+            break;
+
+          // Not used by HDFS NN/clients
+          /*case REENCRYPT_EEK:
+          break;
+          case GET_CURRENT_KEY:
+            break;
+          case GET_KEY_VERSION:
+            break;
+          case GET_KEY_VERSIONS:
+            break;*/
+
+          default:
+            throw new RuntimeException("Unexpected command: " + replayCommand);
+        }
+        /*if (cmd.getCommand().equals("GENERATE_EEK")) {
+          // all GENERATE_EEK comes from NN
+          // expand audit log entries
           genWriter.append(line + "\n");
         } else {
           // if DECRYPT_EEK, remember the key.
           decWriter.append(line + "\n");
-        }
+        }*/
       }
     }
 
     genWriter.close();
-    decWriter.close();
+    for (BufferedWriter aDecWriter : decWriter) {
+      aDecWriter.close();
+    }
 
     // after read is done, create encryption keys, create EDEK of the keys
     if (createEncryptionKey) {
@@ -163,6 +232,7 @@ public class KMSAuditLogPreprocessor extends Configured implements Tool {
 
     return 0;
   }
+
 
   private int parseArguments(String[] args)
       throws ParseException, IOException, ClassNotFoundException {
@@ -194,6 +264,11 @@ public class KMSAuditLogPreprocessor extends Configured implements Tool {
         .withLongOpt(LOAD_EDEK_FILE)
         .create("l");
 
+    Option numClientsOption = OptionBuilder.withArgName("number of clients").hasArg()
+        .withDescription("Specify number of clients (mapper) that will run in replayer. Default: 10")
+        .withLongOpt(NUM_CLIENTS)
+        .create("c");
+
     Options options = new Options();
     options.addOption(helpOption);
     options.addOption(keyOption);
@@ -202,6 +277,7 @@ public class KMSAuditLogPreprocessor extends Configured implements Tool {
     options.addOption(dryRunOption);
     options.addOption(kmsAuditFile);
     options.addOption(loadEDEKOption);
+    options.addOption(numClientsOption);
 
     CommandLineParser parser = new PosixParser();
     CommandLine cli = parser.parse(options, args, true);
@@ -222,6 +298,11 @@ public class KMSAuditLogPreprocessor extends Configured implements Tool {
       edekDumpFileName = DEFAULT_EDEK_DUMP_FILE;
     }
 
+    if (cli.hasOption(NUM_CLIENTS)) {
+      numClients = Integer.parseInt(cli.getOptionValue(NUM_CLIENTS));
+    } else {
+      numClients = NUM_CLIENTS_DEFAULT;
+    }
     if (cli.hasOption("h") || args.length  == 0) {
       HelpFormatter formatter = new HelpFormatter();
       formatter.printHelp(200,
