@@ -43,7 +43,7 @@ public class TestKMSAuditReplayThread {
     AtomicInteger totalAuditCounter = new AtomicInteger();
     AtomicInteger auditReplayCounter = new AtomicInteger();
     KMSAuditReplayThread thread = new KMSAuditReplayThread(context, commandQueue, keyProviderCache,
-        cachedKeyVersion, totalAuditCounter, auditReplayCounter);
+        cachedKeyVersion, totalAuditCounter, auditReplayCounter, false);
     AuditReplayCommand command = new AuditReplayCommand(0, "DECRYPT_EEK", "key1", "foo", 1, 0);
 
     KeyProviderCryptoExtension kpce = mock(KeyProviderCryptoExtension.class);
@@ -72,7 +72,7 @@ public class TestKMSAuditReplayThread {
     AtomicInteger auditReplayCounter = new AtomicInteger();
     KMSAuditReplayThread thread =
         new KMSAuditReplayThread(context, commandQueue, keyProviderCache, cachedKeyVersion,
-            totalAuditCounter, auditReplayCounter);
+            totalAuditCounter, auditReplayCounter, true);
     AuditReplayCommand command = new AuditReplayCommand(0, "GENERATE_EEK", "key1", "foo", 1, 0);
 
     KeyProviderCryptoExtension kpce = mock(KeyProviderCryptoExtension.class);

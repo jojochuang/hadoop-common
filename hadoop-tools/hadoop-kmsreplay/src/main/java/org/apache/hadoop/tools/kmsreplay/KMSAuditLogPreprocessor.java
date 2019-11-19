@@ -16,7 +16,6 @@
  * limitations under the License.
  */
 package org.apache.hadoop.tools.kmsreplay;
-
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.HelpFormatter;
